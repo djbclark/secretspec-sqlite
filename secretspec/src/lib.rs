@@ -43,6 +43,8 @@
 
 // Internal modules
 mod audit;
+#[cfg(feature = "cli")]
+mod broker;
 mod cache;
 mod caller;
 mod codegen;
@@ -58,6 +60,8 @@ mod resolve;
 mod secrets;
 mod spec;
 mod validation;
+#[cfg(windows)]
+mod windows_security;
 
 pub(crate) mod provider;
 
@@ -91,7 +95,11 @@ pub use config::{
     ProviderCache, RequireReason, SecretEncoding, SecretExtract,
 };
 pub use error::{Result, SecretSpecError};
-pub use provider::{DiscoveryContext, ProducedValuePersistence, Provider};
+pub use provider::external::{
+    EndpointSecurity, ExternalProvider, PlatformEndpointSecurity, ProviderDiscovery,
+    ProviderEndpoint, RegistrationScope, set_provider_discovery,
+};
+pub use provider::{Address, DiscoveryContext, ProducedValuePersistence, Provider};
 pub use report::{
     RESOLUTION_REPORT_SCHEMA_VERSION, ResolutionReport, ResolutionStatus, SecretResolution,
 };

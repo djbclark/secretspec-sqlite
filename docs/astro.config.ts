@@ -446,6 +446,28 @@ Values can be resolved from: keyring (default), KeePass KDBX (0.17+), dotenv fil
               slug: "reference/provider-credentials",
               badge: { text: "0.15+", variant: "note" },
             },
+            {
+              label: "IPC protocols",
+              badge: { text: "0.20+", variant: "note" },
+              items: [
+                {
+                  label: "Architecture",
+                  slug: "reference/ipc-architecture",
+                },
+                {
+                  label: "Wire protocol",
+                  slug: "reference/ipc-wire",
+                },
+                {
+                  label: "Resolution protocol",
+                  slug: "reference/client-protocol",
+                },
+                {
+                  label: "Provider protocol",
+                  slug: "reference/provider-protocol",
+                },
+              ],
+            },
           ],
         },
         {
@@ -458,6 +480,11 @@ Values can be resolved from: keyring (default), KeePass KDBX (0.17+), dotenv fil
             {
               label: "Adding an SDK",
               slug: "development/sdks",
+            },
+            {
+              label: "Implementing IPC",
+              slug: "development/ipc-implementation",
+              badge: { text: "0.20+", variant: "note" },
             },
           ],
         },

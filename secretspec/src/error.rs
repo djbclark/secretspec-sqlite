@@ -88,6 +88,8 @@ pub enum SecretSpecError {
     NoProjectName,
     #[error("Provider operation failed: {0}")]
     ProviderOperationFailed(String),
+    #[error("Provider protocol error: {0}")]
+    ProviderProtocol(secretspec_ipc::ErrorKind),
     #[error("User interaction error: {0}")]
     InquireError(#[from] inquire::InquireError),
     #[error("JSON error: {0}")]
@@ -146,6 +148,7 @@ impl SecretSpecError {
             SecretSpecError::ExtendedConfigNotFound(_) => "extended_config_not_found",
             SecretSpecError::NoProjectName => "no_project_name",
             SecretSpecError::ProviderOperationFailed(_) => "provider_operation_failed",
+            SecretSpecError::ProviderProtocol(kind) => kind.as_str(),
             SecretSpecError::InquireError(_) => "inquire",
             SecretSpecError::Json(_) => "json",
             SecretSpecError::InvalidProfile(_) => "invalid_profile",
@@ -268,6 +271,10 @@ mod tests {
             (
                 SecretSpecError::ProviderOperationFailed("nope".into()),
                 "provider_operation_failed",
+            ),
+            (
+                SecretSpecError::ProviderProtocol(secretspec_ipc::ErrorKind::InteractionRequired),
+                "interaction_required",
             ),
             (
                 SecretSpecError::InvalidProfile("ghost".into()),
