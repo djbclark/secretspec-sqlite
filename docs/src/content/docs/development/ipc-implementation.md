@@ -6,7 +6,7 @@ description: Repository layout, handler design, trait mapping, conformance tests
 This guide is the implementation plan for the
 [IPC architecture](/reference/ipc-architecture),
 [wire protocol](/reference/ipc-wire),
-[Secret Resolution Protocol](/reference/client-protocol), and
+[Secret Resolution Protocol](/reference/resolver-protocol), and
 [Secret Provider Protocol](/reference/provider-protocol).
 
 :::caution[Version compatibility]
@@ -25,14 +25,14 @@ Version 1 is complete when the repository contains:
 2. a portable C11 client library with bounded framing, JSON-RPC calls,
    cancellation, deadlines, child lifecycle, and shutdown;
 3. a Rust client/server implementation, reusable resolution request handler,
-   and `secretspec broker --stdio`;
+   and `secretspec serve`;
 4. an external-provider adapter plus endpoint-side handler API;
 5. trusted provider registration and subprocess lifecycle support on all three
    platforms;
 6. golden fixtures, a black-box conformance runner, C/Rust differential
    property tests, and native end-to-end tests;
 7. C source plus static and shared client artifacts whose dependency closure
-   contains no Rust, resolver, broker, or provider code.
+   contains no Rust, resolver, resolver, or provider code.
 
 The wire protocol is the product contract. Rust handler traits and C client
 symbols are implementations of it and may evolve compatibly without changing
@@ -43,9 +43,9 @@ the wire version.
 ```text
 schema/ipc/v1/
   common.schema.json
-  client.schema.json
+  resolver.schema.json
   provider.schema.json
-  client.openrpc.json
+  resolver.openrpc.json
   provider.openrpc.json
   fixtures/
     wire/
@@ -82,7 +82,7 @@ secretspec-ipc/                  # Full Rust client/server implementation
   tests/
 
 secretspec/src/
-  broker.rs
+  serve.rs
   provider/external.rs
 
 conformance/ipc/
@@ -106,9 +106,9 @@ code—so differential testing can expose interpretation differences.
 Keeping application wire types outside the core prevents a dependency cycle:
 
 ```text
-libsecretspec-ipc (C client) <--- Nix and non-Rust broker-mode SDK bindings
+libsecretspec-ipc (C client) <--- Nix and non-Rust resolver-mode SDK bindings
 
-secretspec-ipc (Rust client/server/handlers) <--- Rust SDK, core, CLI/broker,
+secretspec-ipc (Rust client/server/handlers) <--- Rust SDK, core, CLI/resolver,
                                                   provider adapter or endpoint
 ```
 
@@ -125,7 +125,7 @@ request or result shape.
 The schema set should define:
 
 - JSON-RPC request, response, notification, and error envelopes;
-- initialization for `secretspec.client/1` and `secretspec.provider/1`;
+- initialization for `secretspec.resolver/1` and `secretspec.provider/1`;
 - every method's parameter and result object;
 - the common error-kind enum;
 - convention/native addresses and native coordinates;
@@ -222,20 +222,20 @@ pub trait ApplicationHandler: Send + Sync + 'static {
 
 The protocol crate should provide typed resolution/provider handler traits on
 top of this lower-level dispatcher so endpoint authors do not parse JSON-RPC or
-manage terminal races themselves. Endpoint mains call `serve_resolution` or
+manage terminal races themselves. Endpoint mains call `serve_resolver` or
 `serve_provider` directly with that typed handler; the internal JSON adapter is
 not another public assembly step.
 
 The endpoint-facing provider API should accept owned, zeroizing values and
 canonical owned addresses. It should expose one operation enum or individual
-methods matching the provider protocol. A Factorseal endpoint then implements
-that API by translating into `AgentClient`; it does not reimplement the frame
-reader, negotiation, cancellation races, or error envelope.
+methods matching the provider protocol. This API is for out-of-tree endpoints;
+compiled providers such as Factorseal continue to implement the ordinary
+SecretSpec provider trait and may call their native Rust client directly.
 
-## Core changes for the resolution broker
+## Core changes for the resolver
 
 The current `Secrets::resolve_named` persists an `as_path` temporary file and
-returns its path without retaining an owner. The broker requires an internal
+returns its path without retaining an owner. The resolver requires an internal
 owned variant, for example:
 
 ```rust
@@ -250,24 +250,24 @@ pub(crate) enum OwnedNamedResolution {
 }
 ```
 
-Both the embedded and broker paths should call one least-access resolution
+Both the embedded and resolver paths should call one least-access resolution
 implementation:
 
 - the embedded API may keep/persist the file to preserve current behavior;
-- the broker inserts the owner into a session lease table and returns only its
+- the resolver inserts the owner into a session lease table and returns only its
   protected path plus an opaque lease ID;
 - cancellation or response-write failure drops the owner immediately;
 - release and session shutdown remove owners from the table.
 
-Do not implement the broker by calling the existing one-shot JSON FFI. That API
+Do not implement the resolver by calling the existing one-shot JSON FFI. That API
 cannot recover ownership of a persisted file and would make disconnect cleanup
 impossible.
 
-The broker builder must consume only the immutable initialization
+The resolver builder must consume only the immutable initialization
 configuration. It must not fall back to its process working directory or
 ambient profile/scope/reason variables.
 
-Thread the client request's structured purpose into the broker's protected
+Thread the client request's structured purpose into the resolver's protected
 audit context without using it as identity, authorization, or a replacement for
 `reason`. Extend owned resolved metadata with an optional absolute expiry when
 the cache/provider resolution path knows one; serialize null/absence when it
@@ -372,7 +372,7 @@ ownership/permission fixtures.
 ## Child lifecycle
 
 The C and Rust clients each implement the same observable lifecycle contract for
-brokers and provider endpoints:
+resolvers and provider endpoints:
 
 - create private stdin, stdout, and bounded stderr pipes;
 - launch without a shell and retain a process handle;
@@ -392,7 +392,7 @@ both clients and compares normalized outcomes.
 ## Portable C client library
 
 `libsecretspec-ipc` is one of two reference clients and the supported non-Rust
-broker-mode SDK boundary. It is authored in C11, not Rust compiled behind C
+resolver-mode SDK boundary. It is authored in C11, not Rust compiled behind C
 symbols. Release it as source, a static archive, and a shared library for every
 supported native target. Use hidden visibility by default and export only
 `secretspec_ipc_*` symbols.
@@ -560,12 +560,12 @@ write a partial JSON parser and never expose parser objects in the public ABI.
 Build and test with the strictest available warnings, ASan, UBSan, TSan where
 supported, property-based malformed-input coverage, and Windows runtime
 diagnostics. CI must inspect the static
-and shared dependency closure and fail if any Rust artifact, resolver, broker,
+and shared dependency closure and fail if any Rust artifact, resolver, resolver,
 provider SDK, TLS stack, or unrelated runtime appears.
 
 Current language SDKs continue to use the embedded `libsecretspec`. Moving an
-SDK to broker mode is a separate explicit behavior and packaging change. Rust
-uses `secretspec-ipc`; every supported non-Rust broker-mode SDK binds
+SDK to resolver mode is a separate explicit behavior and packaging change. Rust
+uses `secretspec-ipc`; every supported non-Rust resolver-mode SDK binds
 `libsecretspec-ipc` rather than implementing another client.
 
 ## Rust client and server
@@ -578,7 +578,7 @@ writer tasks, deadlines, cancellation tokens, process watching, and typed
 client/server APIs.
 
 The Rust client exposes generic opaque-JSON calls at the wire layer and typed
-resolution/provider sessions above it. `ResolutionSession` and
+resolution/provider sessions above it. `ResolverSession` and
 `ProviderSession` own child launch, initialization validation, transport,
 advertised methods, and shutdown as one lifecycle object. The server exposes
 the reusable handler API described earlier. Both layers use the checked-in
@@ -594,7 +594,7 @@ lifecycle outcomes must agree.
 
 ## Conformance suite
 
-The conformance runner must test any client, broker, provider endpoint, or
+The conformance runner must test any client, resolver, provider endpoint, or
 codec through public bytes and process behavior. It should support a command
 template so third-party implementations can run the same cases. Cases are
 language-neutral but role-specific:
@@ -604,7 +604,7 @@ language-neutral but role-specific:
 | C client | Wire, client lifecycle, generic resolution/provider calls, and C ABI cases |
 | Rust client | The same wire, lifecycle, and generic call cases as the C client, plus typed-client cases |
 | Rust server and handlers | Server wire/lifecycle cases plus resolution and provider semantics |
-| Broker and external provider endpoints | Their applicable server, lifecycle, and application cases |
+| Resolver and external provider endpoints | Their applicable server, lifecycle, and application cases |
 | C/Rust pair | Identical generated client histories with normalized differential outcomes |
 
 "Both implementations pass conformance" means that the C and Rust clients pass
@@ -641,7 +641,7 @@ to the Rust implementation and every conforming endpoint.
 - allocator ownership, null-buffer free, repeated open/close, emergency free,
   worker joining, and absence of use-after-free under sanitizers;
 - static/shared dependency inspection proving that no Rust or SecretSpec core,
-  resolver, broker, or provider artifact is linked.
+  resolver, resolver, or provider artifact is linked.
 
 ### C/Rust differential cases
 
@@ -704,7 +704,7 @@ histories against that ABI and the independent Rust client through one
 deterministic child peer. This bounded local differential property is additive
 to, not a substitute for, the complete cross-platform driver matrix above.
 
-### Executable provider and broker cases
+### Executable provider and resolver cases
 
 The checked-in provider matrix launches a deterministic stateful endpoint as a
 real subprocess. One driver mode calls it through the public Rust provider
@@ -722,8 +722,8 @@ Run it with:
 cargo test -p secretspec-ipc-conformance --test provider_cases
 ```
 
-The broker case is executable test data too. Its integration driver launches
-the actual `secretspec broker --stdio` binary, initializes it with an inline
+The resolver case is executable test data too. Its integration driver launches
+the actual `secretspec serve` binary, initializes it with an inline
 manifest and explicit provider/profile selection, and verifies exact-name
 value, missing, undeclared, and file results. It checks owner-only file mode,
 duplicate release, explicit lease removal, and removal of an unreleased lease
@@ -732,7 +732,7 @@ when the session closes.
 Run it with:
 
 ```console
-cargo test -p secretspec --test ipc_broker
+cargo test -p secretspec --test ipc_resolver
 ```
 
 ### Resolution cases
@@ -751,7 +751,7 @@ cargo test -p secretspec --test ipc_broker
 - mode/ACL of materialized files;
 - random opaque leases, duplicate release, release batching, disconnect
   cleanup, cancelled-result cleanup, and response-write-failure cleanup;
-- broker crash and conservative stale-directory cleanup;
+- resolver crash and conservative stale-directory cleanup;
 - no automatic replay after disconnect.
 
 ### Provider cases
@@ -768,7 +768,7 @@ cargo test -p secretspec --test ipc_broker
 - credential-free write descriptions and value-free reflection;
 - cancellation/deadline during reads and mutations without replay;
 - endpoint crash, relaunch for later work, and no failed-request replay;
-- Factorseal endpoint translation exercised against its native test agent.
+- direct Factorseal provider translation exercised against a native client test double.
 
 Property strategies cover the length-prefix decoder, JSON envelope parser,
 every tagged union, and terminal-state races. Keep protocol fixtures free of
@@ -791,17 +791,16 @@ Implement in reviewable stages:
    C/Rust differential properties, shrinking, and replay fixtures.
 5. **Resolution ownership:** add the internal owned named-materialization path
    and lease table without exposing IPC yet.
-6. **Broker:** reusable resolution handler and `secretspec broker --stdio`, then
+6. **Resolver:** reusable resolution handler and `secretspec serve`, then
    black-box lifecycle tests.
 7. **Provider handler:** endpoint-author API and a deterministic fake endpoint
    that implements every capability.
 8. **External adapter and discovery:** use the Rust IPC client for the trait
    bridge, registrations, readiness, crash behavior, and native platform tests.
-9. **Factorseal integration:** the Factorseal repository provides the
-   `secretspec-provider-factorseal` thin endpoint translation and stable error
-   mapping for SecretSpec 0.20+; native end-to-end conformance remains the
-   release gate.
-10. **Consumer activation:** integrate Nix and non-Rust broker-mode SDKs through
+9. **Factorseal integration:** SecretSpec compiles the `factorseal://` provider
+   against Factorseal's lightweight native Rust client and owns its stable error
+   mapping; native end-to-end conformance remains the release gate.
+10. **Consumer activation:** integrate Nix and non-Rust resolver-mode SDKs through
     the released C client, and Rust consumers through the released Rust client,
     only after their conformance and differential gates pass.
 
@@ -812,7 +811,7 @@ passing unchanged.
 
 - [ ] Schemas, C envelopes, Rust client/server types, fixtures, and rendered
       documentation agree.
-- [ ] The C client has no Rust, SecretSpec core, resolver, broker, or provider
+- [ ] The C client has no Rust, SecretSpec core, resolver, resolver, or provider
       dependency.
 - [ ] Static and shared C artifacts and the public header build on Linux, macOS,
       and Windows.
@@ -836,7 +835,7 @@ passing unchanged.
 - [ ] Clear is demonstrably bounded to the initialized provider namespace.
 - [ ] Error and logging tests never expose values, names, addresses, URIs,
       credentials, paths, or backend bodies.
-- [ ] Version 1 endpoint principal semantics are documented in Factorseal and
-      no forwarded JSON identity is trusted.
+- [ ] Version 1 endpoint principal semantics are documented for external
+      providers and no forwarded JSON identity is trusted.
 - [ ] C warnings, sanitizers, Windows diagnostics, Rust formatting/lint, docs,
       schema, conformance, property, and native end-to-end checks pass.

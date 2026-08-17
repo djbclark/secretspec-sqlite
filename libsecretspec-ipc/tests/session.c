@@ -21,7 +21,7 @@ static secretspec_ipc_slice slice(const char *text) {
 
 int main(int argc, char **argv) {
     static const char initialize[] =
-        "{\"protocol\":\"secretspec.client\",\"versions\":[1],"
+        "{\"protocol\":\"secretspec.resolver\",\"versions\":[1],"
         "\"client\":{\"name\":\"c-test\",\"version\":\"1\"},"
         "\"limits\":{\"max_frame_bytes\":32768,\"max_in_flight\":4},"
         "\"application\":{}}";
@@ -48,8 +48,8 @@ int main(int argc, char **argv) {
     secretspec_ipc_buffer_free(server);
     deadline = now_ms() + 2000;
     status = secretspec_ipc_client_call(client,
-                                        (const unsigned char *)"client.resolve",
-                                        strlen("client.resolve"),
+                                        (const unsigned char *)"resolver.get",
+                                        strlen("resolver.get"),
                                         params,
                                         sizeof(params) - 1,
                                         deadline,

@@ -56,7 +56,7 @@ pub trait ApplicationHandler: Send + Sync + 'static {
 
     /// Reports whether the application's response became the terminal writer
     /// outcome. Handlers use an uncommitted outcome to release resources that
-    /// were created while producing a response (for example broker leases).
+    /// were created while producing a response (for example resolver leases).
     async fn request_finished(&self, _request_id: RequestId, _committed: bool) {}
 
     async fn shutdown(&self) {}
@@ -254,7 +254,7 @@ where
                     continue;
                 }
 
-                if !request.method.starts_with("client.")
+                if !request.method.starts_with("resolver.")
                     && !request.method.starts_with("provider.")
                 {
                     let response =

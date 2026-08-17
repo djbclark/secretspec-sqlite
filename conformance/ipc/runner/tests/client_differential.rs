@@ -172,7 +172,7 @@ impl CClient {
         let deadline_unix_ms = deadline_after(deadline);
         debug_assert!(deadline_unix_ms <= deadline_after(deadline));
         let params = serde_json::to_vec(&params).map_err(|error| error.to_string())?;
-        let method = b"client.resolve";
+        let method = b"resolver.get";
         if matches!(action, Action::Echo { .. }) {
             let mut result = empty_buffer();
             let mut error = empty_buffer();
@@ -333,7 +333,7 @@ fn run_rust(executable: &Path, history: &[Action]) -> Result<Vec<Outcome>, Strin
                     let value: Value = session
                         .client()
                         .call(
-                            "client.resolve",
+                            "resolver.get",
                             &json!({
                                 "mode": "echo",
                                 "token": token
@@ -354,7 +354,7 @@ fn run_rust(executable: &Path, history: &[Action]) -> Result<Vec<Outcome>, Strin
                     let deadline = deadline_after(Duration::from_secs(2));
                     let mut call = session
                         .client()
-                        .start("client.resolve", &json!({"mode": "pending"}), deadline)
+                        .start("resolver.get", &json!({"mode": "pending"}), deadline)
                         .await
                         .map_err(|error| error.stable_message().to_string())?;
                     call.cancel()
@@ -369,7 +369,7 @@ fn run_rust(executable: &Path, history: &[Action]) -> Result<Vec<Outcome>, Strin
                     let deadline = deadline_after(Duration::from_millis(20));
                     let mut call = session
                         .client()
-                        .start("client.resolve", &json!({"mode": "pending"}), deadline)
+                        .start("resolver.get", &json!({"mode": "pending"}), deadline)
                         .await
                         .map_err(|error| error.stable_message().to_string())?;
                     match call.wait().await {
@@ -390,7 +390,7 @@ fn run_rust(executable: &Path, history: &[Action]) -> Result<Vec<Outcome>, Strin
 
 fn initialize_params() -> InitializeParams<Value> {
     InitializeParams {
-        protocol: "secretspec.client".into(),
+        protocol: "secretspec.resolver".into(),
         versions: vec![1],
         client: Product {
             name: "differential-client".into(),

@@ -57,8 +57,8 @@ The registration document has the same format on every platform:
 ```json
 {
   "schema_version": 1,
-  "scheme": "factorseal",
-  "executable": "/absolute/path/to/secretspec-provider-factorseal",
+  "scheme": "example",
+  "executable": "/absolute/path/to/secretspec-provider-example",
   "arguments": [],
   "credential_names": []
 }
@@ -83,7 +83,7 @@ Default registration directories are:
 The loader MUST validate the file name against `scheme`, reject unknown
 registration fields, resolve the executable to an absolute canonical path, and
 check that registration and executable ownership/ACLs are appropriate for the
-trust domain. A privileged broker MUST disable PATH discovery. A manifest may
+trust domain. A privileged resolver MUST disable PATH discovery. A manifest may
 select a registered scheme and URI but must never supply an executable path or
 arguments.
 
@@ -99,8 +99,8 @@ Its `application` member is:
 
 ```json
 {
-  "scheme": "factorseal",
-  "uri": "factorseal://default?namespace=cache",
+  "scheme": "example",
+  "uri": "example://default",
   "base_dir": "/absolute/project/directory",
   "credentials": {},
   "reason": "deploy production api"
@@ -157,13 +157,13 @@ A successful initialization response includes this `application` object:
 ```json
 {
   "provider": {
-    "name": "factorseal",
-    "display_uri": "factorseal://default",
+    "name": "example",
+    "display_uri": "example://default",
     "supported_coordinates": ["field"],
     "generated_value_persistence": "persist",
     "prompted_value_persistence": "persist",
-    "storage_identity": "factorseal://default",
-    "entry_container_identity": "factorseal://default",
+    "storage_identity": "example://default",
+    "entry_container_identity": "example://default",
     "physical_store_path": null
   }
 }
@@ -606,7 +606,7 @@ before a CLI prompt:
 {
   "jsonrpc": "2.0",
   "id": 11,
-  "result": { "description": "Factorseal namespace payments/production" }
+  "result": { "description": "Example provider namespace payments/production" }
 }
 ```
 
@@ -640,7 +640,7 @@ absent, the adapter renders the coordinates returned by
     "schema_version": 1,
     "declarations": {
       "DATABASE_PASSWORD": {
-        "description": "Discovered from Factorseal",
+        "description": "Discovered from the example provider",
         "required": true,
         "ref": { "item": "database", "field": "password" }
       }
@@ -703,9 +703,8 @@ not authenticate an original application to a provider-owned service behind
 the endpoint.
 
 For version 1, the installed provider endpoint executable is the principal for
-that second hop. Factorseal can therefore grant operations to the exact
-`secretspec-provider-factorseal` executable it authenticates over its native
-Unix-socket or Windows named-pipe transport.
+that second hop. A provider-owned service can therefore grant operations to the
+exact endpoint executable it authenticates over its native transport.
 
 The endpoint MUST NOT accept `application_id`, executable path, PID, user ID,
 or signer identity from the provider request and forward it as authenticated
@@ -714,41 +713,35 @@ hops require the cryptographic delegation described in the
 [IPC architecture](/reference/ipc-architecture#principal-and-delegation-decision).
 
 This decision also means every process able to control or legitimately invoke
-the authorized endpoint can exercise the endpoint's Factorseal grant. Package
-permissions and endpoint registration are therefore part of the security
-boundary.
+the authorized endpoint can exercise its service grant. Package permissions
+and endpoint registration are therefore part of the security boundary.
 
 ## Factorseal mapping
 
-The `secretspec-provider-factorseal` endpoint (SecretSpec 0.20+) needs no access
-to SecretSpec storage or resolver state. Its upstream typed handler translates
-operations into the existing Factorseal `AgentClient` boundary:
+Factorseal is an in-tree provider, so it does not use this external-provider
+protocol. SecretSpec compiles the provider against Factorseal's lightweight
+Rust `AgentClient` feature and translates operations directly:
 
-| Secret Provider Protocol | Factorseal agent action |
+| SecretSpec provider operation | Factorseal agent action |
 | --- | --- |
-| convention/native address | endpoint maps to Factorseal namespace plus item/field |
-| `provider.get` | `Get` |
-| `provider.set` | `Put` without eviction |
-| `provider.set_expiring` | `Put` with an eviction deadline computed from `ttl_ms` |
-| `provider.delete` | `Delete` |
-| `provider.clear` | `Clear` for the initialized namespace |
+| convention/native address | provider maps to the cache namespace plus item/field |
+| `get` | `Get` |
+| `set` | `Put` without eviction |
+| `set_expiring` | `Put` with a rounded-down eviction deadline |
+| `delete` | `Delete` |
 
 The Factorseal agent continues to own authenticated native transport, replay
 resistance, durable grants, hardware unlock, expiration, and storage. The
-endpoint maps Factorseal's errors into stable SecretSpec errors and never
-forwards Factorseal error text.
+compiled provider maps Factorseal's errors into stable SecretSpec errors and
+never forwards Factorseal error text.
 
-Factorseal's synchronous `AgentClient` has a bounded native request timeout but
-does not cooperatively cancel a request already accepted by the agent. The
-SecretSpec server still emits one terminal response at its own deadline, holds
-the in-flight permit until that blocking call exits, and never retries a
-request whose Factorseal outcome is unknown.
+Factorseal's synchronous `AgentClient` has a bounded native request timeout and
+does not cooperatively cancel a request already accepted by the agent.
+SecretSpec never retries a mutation whose Factorseal outcome is unknown.
 
-On Linux, Factorseal currently authenticates that endpoint by combining socket
-peer credentials with `/proc/<pid>/exe`. Access to that link is governed by
+On Linux, Factorseal authenticates the consuming SecretSpec or host process by
+combining socket peer credentials with `/proc/<pid>/exe`. Access to that link is governed by
 ptrace checks, and a systemd mount namespace can make it unreadable to the
 agent; see the [Linux procfs documentation](https://docs.kernel.org/filesystems/proc.html).
-Protocol version 1 does not manufacture an alternative identity, so the
-Factorseal unit must retain compatible hardening. A future authenticated broker
-principal or cryptographic delegation could remove the executable lookup and
-allow stronger mount isolation without trusting forwarded JSON identity.
+The Factorseal unit must retain compatible hardening unless its native caller
+identity mechanism changes.

@@ -4,7 +4,7 @@ description: Shared framing, negotiation, cancellation, errors, and lifecycle fo
 ---
 
 This document defines the transport-neutral wire contract shared by the
-[Secret Resolution Protocol](/reference/client-protocol) and the
+[Secret Resolution Protocol](/reference/resolver-protocol) and the
 [Secret Provider Protocol](/reference/provider-protocol).
 
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHOULD**, **SHOULD NOT**,
@@ -115,7 +115,7 @@ local startup bound. Its
   "method": "rpc.initialize",
   "deadline_unix_ms": 1786766405000,
   "params": {
-    "protocol": "secretspec.client",
+    "protocol": "secretspec.resolver",
     "versions": [1],
     "client": { "name": "nix", "version": "2.34.0" },
     "limits": {
@@ -137,10 +137,10 @@ application capability.
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "protocol": "secretspec.client",
+    "protocol": "secretspec.resolver",
     "version": 1,
-    "server": { "name": "secretspec-broker", "version": "0.20.0" },
-    "capabilities": ["client.resolve", "client.release"],
+    "server": { "name": "secretspec-resolver", "version": "0.20.0" },
+    "capabilities": ["resolver.get", "resolver.release"],
     "limits": {
       "max_frame_bytes": 1048576,
       "max_in_flight": 8
@@ -182,7 +182,7 @@ no timeout would reclaim it.
 {
   "jsonrpc": "2.0",
   "id": 2,
-  "method": "client.resolve",
+  "method": "resolver.get",
   "deadline_unix_ms": 1786766405000,
   "params": {
     "name": "FORGE_TOKEN",

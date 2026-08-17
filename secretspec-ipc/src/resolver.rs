@@ -1,8 +1,8 @@
 use crate::error::{ErrorKind, RpcError};
-use crate::protocol::CLIENT_PROTOCOL;
-use crate::protocol::client::{
-    CAPABILITIES, InitializeApplication, InitializedApplication, ReleaseParams, ReleaseResult,
-    ResolveParams, ResolveResult, method,
+use crate::protocol::RESOLVER_PROTOCOL;
+use crate::protocol::resolver::{
+    CAPABILITIES, GetParams, GetResult, InitializeApplication, InitializedApplication,
+    ReleaseParams, ReleaseResult, method,
 };
 use crate::server::{ApplicationHandler, RequestContext, RpcResult, ServerConfig};
 use async_trait::async_trait;
@@ -13,18 +13,14 @@ use std::sync::Arc;
 /// Typed northbound handler. Implementations never parse JSON-RPC envelopes or
 /// arbitrate cancellation/terminal races.
 #[async_trait]
-pub trait ResolutionHandler: Send + Sync + 'static {
+pub trait ResolverHandler: Send + Sync + 'static {
     async fn initialize(
         &self,
         context: &RequestContext,
         application: InitializeApplication,
     ) -> RpcResult<InitializedApplication>;
 
-    async fn resolve(
-        &self,
-        context: RequestContext,
-        params: ResolveParams,
-    ) -> RpcResult<ResolveResult>;
+    async fn get(&self, context: RequestContext, params: GetParams) -> RpcResult<GetResult>;
 
     async fn release(
         &self,
@@ -37,20 +33,20 @@ pub trait ResolutionHandler: Send + Sync + 'static {
     async fn shutdown(&self) {}
 }
 
-struct ResolutionApplication<H> {
+struct ResolverApplication<H> {
     handler: Arc<H>,
 }
 
-impl<H> ResolutionApplication<H> {
+impl<H> ResolverApplication<H> {
     fn new(handler: Arc<H>) -> Self {
         Self { handler }
     }
 }
 
 #[async_trait]
-impl<H: ResolutionHandler> ApplicationHandler for ResolutionApplication<H> {
+impl<H: ResolverHandler> ApplicationHandler for ResolverApplication<H> {
     fn protocol(&self) -> &'static str {
-        CLIENT_PROTOCOL
+        RESOLVER_PROTOCOL
     }
 
     fn capabilities(&self) -> Vec<String> {
@@ -62,7 +58,7 @@ impl<H: ResolutionHandler> ApplicationHandler for ResolutionApplication<H> {
 
     // No `validate_capabilities` override: the hook receives this handler's own
     // `capabilities()`, which is the fixed `CAPABILITIES` constant, so checking
-    // it for `client.resolve`/`client.release` could never fail. The provider
+    // it for `resolver.get`/`resolver.release` could never fail. The provider
     // adapter does override it, because a `ProviderHandler` supplies an
     // arbitrary list whose dependency rules are worth enforcing.
 
@@ -78,10 +74,10 @@ impl<H: ResolutionHandler> ApplicationHandler for ResolutionApplication<H> {
 
     async fn call(&self, context: RequestContext, method: &str, params: Value) -> RpcResult<Value> {
         match method {
-            method::RESOLVE => {
-                let params: ResolveParams = parse(params)?;
+            method::GET => {
+                let params: GetParams = parse(params)?;
                 params.validate().map_err(invalid_params)?;
-                let result = self.handler.resolve(context, params).await?;
+                let result = self.handler.get(context, params).await?;
                 serde_json::to_value(result).map_err(|_| RpcError::new(ErrorKind::Internal))
             }
             method::RELEASE => {
@@ -112,7 +108,7 @@ fn invalid_params(_: crate::Error) -> RpcError {
 }
 
 /// Serve one typed resolution endpoint without assembling the generic adapter.
-pub async fn serve_resolution<R, W, H>(
+pub async fn serve_resolver<R, W, H>(
     reader: R,
     writer: W,
     handler: H,
@@ -121,12 +117,12 @@ pub async fn serve_resolution<R, W, H>(
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
     W: tokio::io::AsyncWrite + Unpin + Send + 'static,
-    H: ResolutionHandler,
+    H: ResolverHandler,
 {
     crate::server::serve(
         reader,
         writer,
-        Arc::new(ResolutionApplication::new(Arc::new(handler))),
+        Arc::new(ResolverApplication::new(Arc::new(handler))),
         config,
     )
     .await

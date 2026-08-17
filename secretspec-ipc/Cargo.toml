@@ -8,6 +8,9 @@ license = "Apache-2.0"
 
 [features]
 default = ["tokio"]
+# Synchronous `secretspec.resolver/1` sessions over `std::process`, for consumers
+# that have no async runtime and must not acquire one. Adds no dependencies.
+blocking = []
 tokio = [
   "dep:async-trait",
   "dep:tokio",
@@ -19,7 +22,10 @@ async-trait = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-zeroize.workspace = true
+# `Zeroizing` only. Declared here rather than inherited from the workspace so
+# the unused `derive` feature, and the proc-macro crate behind it, stay out of
+# the dependency tree of a consumer that depends on this crate alone.
+zeroize = { version = "1.8", default-features = false, features = ["alloc"] }
 tokio = { workspace = true, optional = true, features = ["io-util", "macros", "process", "sync", "time"] }
 tokio-util = { workspace = true, optional = true }
 

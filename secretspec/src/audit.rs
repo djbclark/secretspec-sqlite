@@ -144,7 +144,7 @@ pub(crate) struct AuditContext<'a> {
     pub error_kind: Option<&'a str>,
     pub reason: Option<&'a str>,
     pub caller: Option<&'a CallerContext>,
-    /// Structured caller context supplied by broker-mode clients (0.20+).
+    /// Structured caller context supplied by resolver-mode clients (0.20+).
     /// It is audit attribution only, never identity or authorization input.
     pub purpose: Option<AuditPurpose<'a>>,
 }
@@ -200,7 +200,7 @@ struct AuditEvent<'a> {
     /// Caller-asserted software integration metadata (SecretSpec 0.20+).
     #[serde(skip_serializing_if = "Option::is_none")]
     caller: Option<&'a CallerContext>,
-    /// Broker caller context (SecretSpec 0.20+).
+    /// Resolver caller context (SecretSpec 0.20+).
     #[serde(skip_serializing_if = "Option::is_none")]
     purpose: Option<AuditPurpose<'a>>,
     actor: &'a Actor,

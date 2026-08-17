@@ -11,7 +11,7 @@ application or SDK
         |
         | Secret Resolution Protocol
         v
-SecretSpec broker and resolver
+SecretSpec resolver
         |
         | Secret Provider Protocol
         v
@@ -23,14 +23,14 @@ not one API:
 
 | Boundary | Purpose | Authority |
 | --- | --- | --- |
-| [Secret Resolution Protocol](/reference/client-protocol) | Resolve an exact declared name through a complete SecretSpec configuration | The caller receives the resolved value or a leased file |
+| [Secret Resolution Protocol](/reference/resolver-protocol) | Resolve an exact declared name through a complete SecretSpec configuration | The caller receives the resolved value or a leased file |
 | [Secret Provider Protocol](/reference/provider-protocol) | Implement one provider behind SecretSpec's resolver | The endpoint receives provider addresses and values, but not SecretSpec's storage or resolver internals |
 
 The [implementation guide](/development/ipc-implementation) turns these
 contracts into crates, handlers, tests, and an implementation order.
 
 :::caution[Version compatibility]
-The IPC libraries, broker, external-provider adapter, and protocol version 1
+The IPC libraries, resolver, external-provider adapter, and protocol version 1
 are available starting with SecretSpec 0.20.
 :::
 
@@ -44,8 +44,8 @@ first-class implementations:
 - `secretspec-ipc`, a Rust client/server crate with typed resolution and provider
   handlers.
 
-Nix and non-Rust broker-mode SDKs use the C client. Rust consumers, the
-SecretSpec external-provider adapter, the broker, and Rust provider endpoints
+Nix and non-Rust resolver-mode SDKs use the C client. Rust consumers, the
+SecretSpec external-provider adapter, the resolver, and Rust provider endpoints
 use the Rust implementation. Both implementations are tested against the same
 language-neutral conformance suite and differential state-machine tests.
 
@@ -76,12 +76,12 @@ The intended deliverables are therefore:
   session, and public C header, with no Rust or provider dependencies;
 - `secretspec-ipc`: Rust wire types, client, server dispatcher, process
   lifecycle, and typed resolution/provider handlers;
-- thin non-Rust SDK bindings around the C ABI for broker mode;
+- thin non-Rust SDK bindings around the C ABI for resolver mode;
 - one language-neutral conformance suite plus C/Rust differential tests.
 
 The existing `libsecretspec` remains the embedded resolver ABI used by current
 language SDKs. It is not silently changed into an IPC client. An SDK may later
-offer `embedded` and `broker` backends behind the same language-level API.
+offer `embedded` and `resolver` backends behind the same language-level API.
 
 ### Why not Varlink?
 
@@ -128,16 +128,18 @@ The layers are independently owned and versioned:
 
 1. The wire layer owns frames, JSON-RPC envelopes, initialization, request
    IDs, deadlines, cancellation, shutdown, common errors, and resource bounds.
-2. `secretspec.client/1` owns resolver configuration, exact-name resolution,
+2. `secretspec.resolver/1` owns resolver configuration, exact-name resolution,
    value/file representations, and file leases.
 3. `secretspec.provider/1` owns provider discovery, provider metadata,
    canonical addresses, provider operations, and provider error mapping.
 4. A provider owns its storage, encryption, synchronization, hardware keys,
    grants, and any protocol used behind its endpoint.
 
-Factorseal, for example, exposes only a SecretSpec provider endpoint. Turso,
-Automerge, encryption, hardware-backed keys, and Factorseal grants stay behind
-that endpoint and are never modeled in SecretSpec IPC.
+An external provider exposes only the SecretSpec endpoint contract. Its
+storage engine, encryption, synchronization, hardware keys, and grants stay
+behind that endpoint and are never modeled in SecretSpec IPC. In-tree providers
+may instead call a provider-owned Rust client directly; the compiled
+`factorseal` provider uses that path.
 
 Application methods from the two protocols must never be mixed on one
 connection. Initialization selects exactly one protocol name and major
@@ -173,19 +175,20 @@ authorization.
 ## Principal and delegation decision
 
 For protocol version 1, an external provider endpoint acts as its own
-application principal when it connects to a provider-owned agent. This makes
-the initial Factorseal integration concrete: Factorseal can authorize the
-exact installed SecretSpec provider endpoint executable.
+application principal when it connects to a provider-owned agent. This rule
+does not apply to compiled providers: the SecretSpec CLI or embedding
+application is the process that connects to the Factorseal agent and is
+therefore its authenticated principal.
 
 The endpoint must not authorize an original application identity copied from a
 JSON field. A process path, PID, `application_id`, user name, or similar value
-forwarded by the broker is only an assertion and is not authenticated
+forwarded by the resolver is only an assertion and is not authenticated
 delegation.
 
 If grants must instead follow the application that invoked SecretSpec, a later
 capability must define a cryptographic delegation that is:
 
-- issued from an identity authenticated on the client-to-broker transport;
+- issued from an identity authenticated on the client-to-resolver transport;
 - signed by an issuer trusted by the provider or provider-owned agent;
 - audience-bound to that provider endpoint or agent;
 - scoped to operations and addresses;
@@ -206,7 +209,7 @@ confused-deputy boundary.
 - Unknown capabilities are ignored. Unknown methods receive
   `method_not_found`. Unknown parameters are rejected so misspellings do not
   weaken a security decision.
-- The C library/ABI, an SDK package, the Rust handler crate, broker binary, and
+- The C library/ABI, an SDK package, the Rust handler crate, resolver binary, and
   provider endpoint each have their own product versions. None of those version
   strings replaces protocol negotiation.
 - No request that might have reached a handler is automatically replayed after

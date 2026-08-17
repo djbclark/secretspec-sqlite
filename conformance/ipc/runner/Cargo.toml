@@ -11,7 +11,7 @@ serde.workspace = true
 serde_json.workspace = true
 secrecy.workspace = true
 secretspec = { path = "../../../secretspec", default-features = false }
-secretspec-ipc.workspace = true
+secretspec-ipc = { workspace = true, features = ["blocking"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 

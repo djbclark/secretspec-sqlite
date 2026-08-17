@@ -136,9 +136,9 @@ fn validate_case(case: &Case) -> Result<(), String> {
 fn check_schema_assets() -> Result<(), String> {
     for name in [
         "common.schema.json",
-        "client.schema.json",
+        "resolver.schema.json",
         "provider.schema.json",
-        "client.openrpc.json",
+        "resolver.openrpc.json",
         "provider.openrpc.json",
     ] {
         let path = schema_root().join(name);

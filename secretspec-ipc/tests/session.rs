@@ -12,11 +12,11 @@ struct Echo;
 #[async_trait]
 impl ApplicationHandler for Echo {
     fn protocol(&self) -> &'static str {
-        "secretspec.client"
+        "secretspec.resolver"
     }
 
     fn capabilities(&self) -> Vec<String> {
-        vec!["client.resolve".into()]
+        vec!["resolver.get".into()]
     }
 
     async fn initialize(&self, _context: &RequestContext, application: Value) -> RpcResult<Value> {
@@ -55,7 +55,7 @@ async fn session() -> (Client, tokio::task::JoinHandle<secretspec_ipc::Result<()
         ServerConfig::default(),
     ));
     let initialize = InitializeParams {
-        protocol: "secretspec.client".into(),
+        protocol: "secretspec.resolver".into(),
         versions: vec![1],
         client: Product {
             name: "test".into(),
@@ -83,7 +83,7 @@ async fn initializes_calls_and_shuts_down() {
     let (client, server) = session().await;
     let call_deadline = deadline(Duration::from_secs(2));
     let result: Value = client
-        .call("client.resolve", &json!({"value": 42}), call_deadline)
+        .call("resolver.get", &json!({"value": 42}), call_deadline)
         .await
         .unwrap();
     assert_eq!(result["value"], 42);
@@ -99,7 +99,7 @@ async fn cancellation_has_one_terminal_result() {
     let (client, server) = session().await;
     let call_deadline = deadline(Duration::from_secs(2));
     let mut call = client
-        .start("client.resolve", &json!({"wait": true}), call_deadline)
+        .start("resolver.get", &json!({"wait": true}), call_deadline)
         .await
         .unwrap();
     call.cancel().await.unwrap();
@@ -119,7 +119,7 @@ async fn deadline_has_one_terminal_result() {
     let (client, server) = session().await;
     let call_deadline = deadline(Duration::from_millis(50));
     let error = client
-        .call::<_, Value>("client.resolve", &json!({"wait": true}), call_deadline)
+        .call::<_, Value>("resolver.get", &json!({"wait": true}), call_deadline)
         .await
         .unwrap_err();
     assert!(matches!(error, secretspec_ipc::Error::DeadlineExceeded));
@@ -146,7 +146,7 @@ async fn rejected_initialization_closes_both_transport_tasks() {
                 "protocol": "wrong.protocol",
                 "version": 1,
                 "server": {"name": "fake", "version": "1"},
-                "capabilities": ["client.resolve"],
+                "capabilities": ["resolver.get"],
                 "limits": {"max_frame_bytes": 32768, "max_in_flight": 4},
                 "application": {}
             }
@@ -164,7 +164,7 @@ async fn rejected_initialization_closes_both_transport_tasks() {
 
     let (client_read, client_write) = tokio::io::split(client_io);
     let initialize = InitializeParams {
-        protocol: "secretspec.client".into(),
+        protocol: "secretspec.resolver".into(),
         versions: vec![1],
         client: Product {
             name: "test".into(),
@@ -202,10 +202,10 @@ async fn deadline_does_not_wait_for_cancel_queue_capacity() {
             "jsonrpc": "2.0",
             "id": 1,
             "result": {
-                "protocol": "secretspec.client",
+                "protocol": "secretspec.resolver",
                 "version": 1,
                 "server": {"name": "backpressured", "version": "1"},
-                "capabilities": ["client.resolve"],
+                "capabilities": ["resolver.get"],
                 "limits": {"max_frame_bytes": 4096, "max_in_flight": 4},
                 "application": {}
             }
@@ -219,7 +219,7 @@ async fn deadline_does_not_wait_for_cancel_queue_capacity() {
 
     let (client_read, client_write) = tokio::io::split(client_io);
     let initialize = InitializeParams {
-        protocol: "secretspec.client".into(),
+        protocol: "secretspec.resolver".into(),
         versions: vec![1],
         client: Product {
             name: "test".into(),
@@ -245,7 +245,7 @@ async fn deadline_does_not_wait_for_cancel_queue_capacity() {
     for _ in 0..4 {
         let mut call = client
             .start(
-                "client.resolve",
+                "resolver.get",
                 &json!({
                     "padding": "x".repeat(3000)
                 }),
@@ -285,10 +285,10 @@ async fn dropped_calls_are_bounded_as_abandoned_requests() {
             "jsonrpc": "2.0",
             "id": 1,
             "result": {
-                "protocol": "secretspec.client",
+                "protocol": "secretspec.resolver",
                 "version": 1,
                 "server": {"name": "nonresponsive", "version": "1"},
-                "capabilities": ["client.resolve"],
+                "capabilities": ["resolver.get"],
                 "limits": {"max_frame_bytes": 4096, "max_in_flight": 4},
                 "application": {}
             }
@@ -302,7 +302,7 @@ async fn dropped_calls_are_bounded_as_abandoned_requests() {
 
     let (client_read, client_write) = tokio::io::split(client_io);
     let initialize = InitializeParams {
-        protocol: "secretspec.client".into(),
+        protocol: "secretspec.resolver".into(),
         versions: vec![1],
         client: Product {
             name: "test".into(),
@@ -326,7 +326,7 @@ async fn dropped_calls_are_bounded_as_abandoned_requests() {
     for _ in 0..200 {
         let call_deadline = deadline(Duration::from_secs(5));
         match client
-            .start("client.resolve", &json!({}), call_deadline)
+            .start("resolver.get", &json!({}), call_deadline)
             .await
         {
             Ok(call) => drop(call),
@@ -351,11 +351,11 @@ struct ShutdownWitness {
 #[async_trait]
 impl ApplicationHandler for ShutdownWitness {
     fn protocol(&self) -> &'static str {
-        "secretspec.client"
+        "secretspec.resolver"
     }
 
     fn capabilities(&self) -> Vec<String> {
-        vec!["client.resolve".into()]
+        vec!["resolver.get".into()]
     }
 
     async fn initialize(&self, _context: &RequestContext, application: Value) -> RpcResult<Value> {
@@ -380,7 +380,7 @@ impl ApplicationHandler for ShutdownWitness {
 async fn transport_failure_still_runs_session_cleanup() {
     // A frame that violates the wire rules used to propagate straight out of
     // `serve`, skipping in-flight cancellation, task joining, and the handler's
-    // shutdown hook. Resources such as broker leases depend on that hook, so a
+    // shutdown hook. Resources such as resolver leases depend on that hook, so a
     // hostile or broken peer must not be able to skip it.
     let (mut client_io, server_io) = tokio::io::duplex(64 * 1024);
     let (server_read, server_write) = tokio::io::split(server_io);
@@ -404,7 +404,7 @@ async fn transport_failure_still_runs_session_cleanup() {
         "method": "rpc.initialize",
         "deadline_unix_ms": deadline(Duration::from_secs(2)),
         "params": {
-            "protocol": "secretspec.client",
+            "protocol": "secretspec.resolver",
             "versions": [1],
             "client": {"name": "test", "version": "1"},
             "limits": {"max_frame_bytes": 32 * 1024, "max_in_flight": 4},

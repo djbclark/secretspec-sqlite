@@ -1,23 +1,21 @@
 use crate::client::Client;
 use crate::deadline::instant_from_unix_ms;
-use crate::protocol::client::{
-    self as client_protocol, InitializeApplication as ResolutionInitializeApplication,
-    InitializedApplication as ResolutionInitializedApplication,
-};
 use crate::protocol::provider::{
     self as provider_protocol, InitializeApplication as ProviderInitializeApplication,
     InitializedApplication as ProviderInitializedApplication, Metadata,
 };
+use crate::protocol::resolver::{
+    self as resolver_protocol, InitializeApplication as ResolverInitializeApplication,
+    InitializedApplication as ResolverInitializedApplication,
+};
 use crate::protocol::{
-    CLIENT_PROTOCOL, InitializeParams, InitializeResult, Limits, PROTOCOL_VERSION,
-    PROVIDER_PROTOCOL, Product,
+    InitializeParams, InitializeResult, Limits, PROTOCOL_VERSION, PROVIDER_PROTOCOL, Product,
+    RESOLVER_PROTOCOL,
 };
 use crate::{Error, Result, deadline_unix_ms_after};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::collections::{BTreeMap, HashSet};
-use std::ffi::OsString;
-use std::path::PathBuf;
+use std::collections::HashSet;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,41 +34,7 @@ use zeroize::Zeroizing;
 /// (which the graceful wait has already spent by then).
 const REAP_GRACE: Duration = Duration::from_secs(2);
 
-#[derive(Debug, Clone)]
-pub enum Environment {
-    /// Inherit the caller environment and apply these overrides.
-    Inherit(BTreeMap<OsString, OsString>),
-    /// Clear the environment and install exactly these entries.
-    Replace(BTreeMap<OsString, OsString>),
-}
-
-#[derive(Debug, Clone)]
-pub struct LaunchOptions {
-    pub executable: PathBuf,
-    pub arguments: Vec<OsString>,
-    pub environment: Environment,
-    pub allow_path_discovery: bool,
-    pub max_stderr_bytes: usize,
-}
-
-impl LaunchOptions {
-    pub fn validate(&self) -> Result<()> {
-        if self.executable.as_os_str().is_empty() {
-            return Err(Error::Protocol("executable is empty"));
-        }
-        if !self.allow_path_discovery && !self.executable.is_absolute() {
-            return Err(Error::Protocol(
-                "executable must be absolute unless discovery is enabled",
-            ));
-        }
-        if self.max_stderr_bytes > 1_048_576 {
-            return Err(Error::Protocol(
-                "stderr capture exceeds the version 1 bound",
-            ));
-        }
-        Ok(())
-    }
-}
+pub use crate::launch::{Environment, LaunchOptions};
 
 /// An owned child and its initialized wire session.
 pub struct ChildSession {
@@ -282,31 +246,31 @@ impl ProviderSession {
     }
 }
 
-/// An initialized `secretspec.client/1` client together with the child process
+/// An initialized `secretspec.resolver/1` client together with the child process
 /// that owns its private transport.
-pub struct ResolutionSession {
+pub struct ResolverSession {
     child: ChildSession,
     capabilities: HashSet<String>,
-    initialized: ResolutionInitializedApplication,
+    initialized: ResolverInitializedApplication,
 }
 
-impl ResolutionSession {
+impl ResolverSession {
     pub async fn launch(
         options: LaunchOptions,
         client: Product,
         limits: Limits,
-        application: ResolutionInitializeApplication,
+        application: ResolverInitializeApplication,
         startup_deadline_unix_ms: u64,
     ) -> Result<Self> {
         application.validate()?;
         let initialize = InitializeParams {
-            protocol: CLIENT_PROTOCOL.to_string(),
+            protocol: RESOLVER_PROTOCOL.to_string(),
             versions: vec![PROTOCOL_VERSION],
             client,
             limits,
             application,
         };
-        let (child, initialized) = spawn::<_, ResolutionInitializedApplication>(
+        let (child, initialized) = spawn::<_, ResolverInitializedApplication>(
             options,
             initialize,
             startup_deadline_unix_ms,
@@ -319,7 +283,7 @@ impl ResolutionSession {
             return Err(error);
         }
         let capabilities: HashSet<_> = initialized.capabilities.into_iter().collect();
-        if !client_protocol::CAPABILITIES
+        if !resolver_protocol::CAPABILITIES
             .iter()
             .all(|method| capabilities.contains(*method))
         {
@@ -341,25 +305,25 @@ impl ResolutionSession {
         self.child.client()
     }
 
-    pub async fn resolve(
+    pub async fn get(
         &self,
-        params: &client_protocol::ResolveParams,
+        params: &resolver_protocol::GetParams,
         deadline_unix_ms: u64,
-    ) -> Result<client_protocol::ResolveResult> {
+    ) -> Result<resolver_protocol::GetResult> {
         self.child
             .client()
-            .call(client_protocol::method::RESOLVE, params, deadline_unix_ms)
+            .call(resolver_protocol::method::GET, params, deadline_unix_ms)
             .await
     }
 
     pub async fn release(
         &self,
-        params: &client_protocol::ReleaseParams,
+        params: &resolver_protocol::ReleaseParams,
         deadline_unix_ms: u64,
-    ) -> Result<client_protocol::ReleaseResult> {
+    ) -> Result<resolver_protocol::ReleaseResult> {
         self.child
             .client()
-            .call(client_protocol::method::RELEASE, params, deadline_unix_ms)
+            .call(resolver_protocol::method::RELEASE, params, deadline_unix_ms)
             .await
     }
 
@@ -367,7 +331,7 @@ impl ResolutionSession {
         &self.capabilities
     }
 
-    pub fn initialized(&self) -> &ResolutionInitializedApplication {
+    pub fn initialized(&self) -> &ResolverInitializedApplication {
         &self.initialized
     }
 

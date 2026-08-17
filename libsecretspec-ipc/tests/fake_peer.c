@@ -150,9 +150,9 @@ int main(int argc, char **argv) {
             } else {
                 length = snprintf(response, sizeof(response),
                     "{\"jsonrpc\":\"2.0\",\"id\":%llu,\"result\":{"
-                    "\"protocol\":\"secretspec.client\",\"version\":1,"
+                    "\"protocol\":\"secretspec.resolver\",\"version\":1,"
                     "\"server\":{\"name\":\"fake-peer\",\"version\":\"1\"},"
-                    "\"capabilities\":[\"client.resolve\",\"client.release\"],"
+                    "\"capabilities\":[\"resolver.get\",\"resolver.release\"],"
                     "\"limits\":{\"max_frame_bytes\":32768,\"max_in_flight\":4},"
                     "\"application\":{}}}",
                     (unsigned long long)yyjson_get_uint(id));

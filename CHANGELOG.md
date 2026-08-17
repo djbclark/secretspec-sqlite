@@ -27,6 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `secretspec-ipc` gained a `blocking` feature with a synchronous
+  `secretspec.resolver/1` session, so a program with no async runtime can talk to
+  `secretspec serve` without acquiring one. It speaks the same wire
+  protocol as the async client and passes the same fake-peer conformance cases,
+  and it pulls in no dependencies beyond the crate's existing serde, serde_json,
+  thiserror, and zeroize. Deadlines are enforced by terminating the child, since
+  a blocking pipe read cannot be interrupted.
+- **Factorseal provider** (`factorseal://`): a compiled Rust provider connects
+  directly to Factorseal's authenticated per-user native agent. It supports
+  convention and native addresses, reads, writes, bounded expiry, and
+  idempotent deletion without a provider subprocess or registration file.
 - **Azure App Configuration provider** (`aac://`, 0.20+): select direct
   values and Azure Key Vault references by label, prefix, and tags, with Entra
   ID or connection-string authentication and guarded writes, deletion, and
@@ -64,12 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `flyctl secrets set` over stdin, refuse boundary whitespace that `flyctl`
   would silently trim, and scrub ambient Fly token variables before injecting
   the token selected through the provider credential mechanism.
-- SecretSpec 0.20+ adds versioned local IPC: a private stdio resolution broker,
+- SecretSpec 0.20+ adds versioned local IPC: a private stdio resolver,
   trusted out-of-tree provider endpoints, independent Rust and pure-C clients,
-  exact-name resolution with broker-owned file leases, and shared
+  exact-name resolution with resolver-owned file leases, and shared
   schema/OpenRPC/conformance contracts, including executable common-case
   drivers for both clients, the Rust provider endpoint and external adapter,
-  plus the real broker process. Provider IPC preserves structured error kinds,
+  plus the real resolver process. Provider IPC preserves structured error kinds,
   never uses protocol streams for prompts, and isolates endpoint state by URI
   and reason; discovery precedence and non-replay are covered by executable
   tests. IPC deadlines live once on the request envelope, endpoints advertise
@@ -189,7 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - SecretSpec 0.20+ IPC enforces Windows ACL isolation for provider discovery
-  and broker lease files, bounds cancellation and child-process cleanup by
+  and resolver lease files, bounds cancellation and child-process cleanup by
   request deadlines, and validates the same protocol constraints in its Rust
   and C clients. Request deadlines are clamped to 300 seconds in the future by
   both clients, so a peer cannot hold an in-flight slot indefinitely; a

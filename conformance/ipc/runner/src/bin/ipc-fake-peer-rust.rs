@@ -89,7 +89,7 @@ fn serve(mode: Mode) -> Result<(), ()> {
                     }
                 }
             }
-            "client.resolve" => {
+            "resolver.get" => {
                 let id = id.ok_or(())?;
                 let params = envelope
                     .get("params")
@@ -107,8 +107,33 @@ fn serve(mode: Mode) -> Result<(), ()> {
                     Some("pending") => {
                         pending.insert(id);
                     }
+                    // A typed client sends real `GetParams`, which carry no
+                    // `mode`. The declared name selects the outcome so one peer
+                    // covers every branch of `GetResult`.
+                    None => {
+                        let name = params.get("name").and_then(Value::as_str).ok_or(())?;
+                        match resolve_response(id, name) {
+                            Some(response) => write_frame(&mut output, &response)?,
+                            None => {
+                                pending.insert(id);
+                            }
+                        }
+                    }
                     _ => return Err(()),
                 }
+            }
+            "resolver.release" => {
+                let id = id.ok_or(())?;
+                let released = envelope
+                    .get("params")
+                    .and_then(|params| params.get("lease_ids"))
+                    .and_then(Value::as_array)
+                    .ok_or(())?
+                    .len();
+                write_frame(
+                    &mut output,
+                    &json!({"jsonrpc": "2.0", "id": id, "result": {"released": released}}),
+                )?;
             }
             "rpc.cancel" => {
                 if id.is_some() {
@@ -147,17 +172,46 @@ fn serve(mode: Mode) -> Result<(), ()> {
     }
 }
 
+/// `None` leaves the request unanswered so a caller can observe its deadline.
+fn resolve_response(id: u64, name: &str) -> Option<Value> {
+    let result = match name {
+        "RESOLVED_VALUE" => json!({
+            "status": "resolved",
+            "representation": "value",
+            "value": "canary-value",
+            "source": "provider",
+            "source_provider": "keyring://",
+            "expires_at_unix_ms": null
+        }),
+        "MISSING_REQUIRED" => json!({"status": "missing", "required": true}),
+        "UNDECLARED" => json!({"status": "undeclared"}),
+        "SILENT" => return None,
+        _ => {
+            return Some(json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": {
+                    "code": -32005,
+                    "message": "permission denied",
+                    "data": {"kind": "permission_denied", "retryable": false}
+                }
+            }));
+        }
+    };
+    Some(json!({"jsonrpc": "2.0", "id": id, "result": result}))
+}
+
 fn initialize_response(id: u64) -> Value {
     json!({
         "jsonrpc": "2.0",
         "id": id,
         "result": {
-            "protocol": "secretspec.client",
+            "protocol": "secretspec.resolver",
             "version": 1,
             "server": {"name": "differential-peer", "version": "1"},
-            "capabilities": ["client.resolve", "client.release"],
+            "capabilities": ["resolver.get", "resolver.release"],
             "limits": {"max_frame_bytes": 32768, "max_in_flight": 4},
-            "application": {}
+            "application": {"manifest_kind": "inline", "supports_inline_manifest": true}
         }
     })
 }

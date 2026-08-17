@@ -460,7 +460,7 @@ Values can be resolved from: keyring (default), KeePass KDBX (0.17+), dotenv fil
                 },
                 {
                   label: "Resolution protocol",
-                  slug: "reference/client-protocol",
+                  slug: "reference/resolver-protocol",
                 },
                 {
                   label: "Provider protocol",

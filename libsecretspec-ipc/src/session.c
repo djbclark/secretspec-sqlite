@@ -849,7 +849,7 @@ static bool initialize_offer_valid(yyjson_val *offer) {
     if (!ss_json_is_closed_object(offer, keys, 5)) return false;
     protocol = yyjson_obj_get(offer, "protocol");
     versions = yyjson_obj_get(offer, "versions");
-    if ((!string_equals(protocol, "secretspec.client") &&
+    if ((!string_equals(protocol, "secretspec.resolver") &&
          !string_equals(protocol, "secretspec.provider")) ||
         !yyjson_is_arr(versions) || yyjson_arr_size(versions) == 0 ||
         !product_valid(yyjson_obj_get(offer, "client")) ||
@@ -914,9 +914,9 @@ static bool validate_initialize_result(
         !limits_valid(yyjson_obj_get(offer, "limits"), &offered_frame, &offered_in_flight) ||
         frame > offered_frame || in_flight > offered_in_flight ||
         !yyjson_is_obj(yyjson_obj_get(result, "application"))) goto done;
-    if (string_equals(protocol, "secretspec.client")) {
-        if (!array_has_text(capabilities, "client.resolve") ||
-            !array_has_text(capabilities, "client.release")) goto done;
+    if (string_equals(protocol, "secretspec.resolver")) {
+        if (!array_has_text(capabilities, "resolver.get") ||
+            !array_has_text(capabilities, "resolver.release")) goto done;
     } else {
         if (!array_has_text(capabilities, "provider.resolve_address") ||
             (!array_has_text(capabilities, "provider.get") &&

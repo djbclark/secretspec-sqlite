@@ -43,8 +43,6 @@
 
 // Internal modules
 mod audit;
-#[cfg(feature = "cli")]
-mod broker;
 mod cache;
 mod caller;
 mod codegen;
@@ -58,6 +56,8 @@ mod plan;
 mod report;
 mod resolve;
 mod secrets;
+#[cfg(feature = "cli")]
+mod serve;
 mod spec;
 mod validation;
 #[cfg(windows)]

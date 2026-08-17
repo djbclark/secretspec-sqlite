@@ -31,19 +31,28 @@ pub fn clamp_unix_ms(deadline_unix_ms: u64) -> u64 {
     unix_ms_after(MAX_DEADLINE_HORIZON).min(deadline_unix_ms)
 }
 
-/// Converts an absolute Unix-millisecond deadline into a monotonic instant,
-/// clamped to [`MAX_DEADLINE_HORIZON`] past now. An already-elapsed deadline
-/// yields the current instant so callers reject it as expired.
-#[cfg(feature = "tokio")]
-pub(crate) fn instant_from_unix_ms(deadline_unix_ms: u64) -> tokio::time::Instant {
+/// Time left until an absolute Unix-millisecond deadline, clamped to
+/// [`MAX_DEADLINE_HORIZON`]. An already-elapsed deadline yields zero so callers
+/// reject it as expired instead of waiting.
+///
+/// This is the runtime-independent half of deadline handling: a blocking caller
+/// needs a `Duration` to hand to a timed wait, and the async transports build
+/// their `Instant` from the same value so both enforce the identical horizon.
+pub fn duration_until_unix_ms(deadline_unix_ms: u64) -> Duration {
     let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis()
         .min(u64::MAX as u128) as u64;
-    let remaining =
-        Duration::from_millis(deadline_unix_ms.saturating_sub(now_ms)).min(MAX_DEADLINE_HORIZON);
-    tokio::time::Instant::now() + remaining
+    Duration::from_millis(deadline_unix_ms.saturating_sub(now_ms)).min(MAX_DEADLINE_HORIZON)
+}
+
+/// Converts an absolute Unix-millisecond deadline into a monotonic instant,
+/// clamped to [`MAX_DEADLINE_HORIZON`] past now. An already-elapsed deadline
+/// yields the current instant so callers reject it as expired.
+#[cfg(feature = "tokio")]
+pub(crate) fn instant_from_unix_ms(deadline_unix_ms: u64) -> tokio::time::Instant {
+    tokio::time::Instant::now() + duration_until_unix_ms(deadline_unix_ms)
 }
 
 #[cfg(test)]

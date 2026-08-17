@@ -1,9 +1,8 @@
 #![cfg(feature = "cli")]
 
-use secretspec_ipc::lifecycle::{Environment, LaunchOptions, ResolutionSession};
-use secretspec_ipc::protocol::client::{
-    InitializeApplication, Manifest, Purpose, ReleaseParams, Representation, ResolveParams,
-    ResolveResult,
+use secretspec_ipc::lifecycle::{Environment, LaunchOptions, ResolverSession};
+use secretspec_ipc::protocol::resolver::{
+    GetParams, GetResult, InitializeApplication, Manifest, Purpose, ReleaseParams, Representation,
 };
 use secretspec_ipc::protocol::{Limits, Product};
 use serde_json::Value;
@@ -21,19 +20,19 @@ fn deadline(after: Duration) -> u64 {
 }
 
 #[tokio::test]
-async fn checked_in_broker_case_runs_against_the_real_cli() {
+async fn checked_in_resolver_case_runs_against_the_real_cli() {
     let case: Value = serde_json::from_str(include_str!(
-        "../../conformance/ipc/cases/broker-leases.json"
+        "../../conformance/ipc/cases/resolver-leases.json"
     ))
     .unwrap();
     assert_eq!(case["schema_version"], 1);
-    assert_eq!(case["id"], "broker.file-leases");
+    assert_eq!(case["id"], "resolver.file-leases");
     assert!(
         case["targets"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|target| target == "broker")
+            .any(|target| target == "resolver")
     );
     let actions = case["actions"].as_array().unwrap();
     let initialize_action = actions
@@ -69,10 +68,10 @@ UNRELATED = { description = "named resolution must not read this", required = tr
         scope: None,
         reason: None,
     };
-    let session = ResolutionSession::launch(
+    let session = ResolverSession::launch(
         LaunchOptions {
             executable: PathBuf::from(env!("CARGO_BIN_EXE_secretspec")),
-            arguments: vec![OsString::from("broker"), OsString::from("--stdio")],
+            arguments: vec![OsString::from("serve")],
             environment: Environment::Inherit(BTreeMap::new()),
             allow_path_discovery: false,
             max_stderr_bytes: 64 * 1024,
@@ -110,8 +109,8 @@ UNRELATED = { description = "named resolution must not read this", required = tr
                     other => panic!("unsupported representation {other}"),
                 };
                 let result = session
-                    .resolve(
-                        &ResolveParams {
+                    .get(
+                        &GetParams {
                             name: name.into(),
                             representation,
                             purpose: purpose.clone(),
@@ -121,19 +120,19 @@ UNRELATED = { description = "named resolution must not read this", required = tr
                     .await
                     .unwrap();
                 match (name, result) {
-                    ("TOKEN", ResolveResult::Value(value)) => {
+                    ("TOKEN", GetResult::Value(value)) => {
                         assert_eq!(value.value, "inline-value");
                         assert_eq!(value.expires_at_unix_ms, None);
                         events.insert("resolved_value");
                     }
-                    ("OPTIONAL", ResolveResult::Missing(missing)) => {
+                    ("OPTIONAL", GetResult::Missing(missing)) => {
                         assert!(!missing.required);
                         events.insert("missing");
                     }
-                    ("UNKNOWN", ResolveResult::Undeclared(_)) => {
+                    ("UNKNOWN", GetResult::Undeclared(_)) => {
                         events.insert("undeclared");
                     }
-                    ("CERT", ResolveResult::File(file)) => {
+                    ("CERT", GetResult::File(file)) => {
                         assert_eq!(std::fs::read_to_string(&file.path).unwrap(), "leased-value");
                         assert_eq!(file.expires_at_unix_ms, None);
                         #[cfg(unix)]
@@ -147,7 +146,7 @@ UNRELATED = { description = "named resolution must not read this", required = tr
                         active_lease = Some((file.path, file.lease_id));
                         events.insert("lease_created");
                     }
-                    _ => panic!("broker returned the wrong result for {name}"),
+                    _ => panic!("resolver returned the wrong result for {name}"),
                 }
             }
             "release" => {
@@ -176,7 +175,7 @@ UNRELATED = { description = "named resolution must not read this", required = tr
                 events.insert("disconnect_cleanup");
                 events.insert("closed");
             }
-            other => panic!("unsupported broker case action {other}"),
+            other => panic!("unsupported resolver case action {other}"),
         }
     }
 

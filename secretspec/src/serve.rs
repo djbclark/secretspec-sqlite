@@ -5,13 +5,13 @@ use async_trait::async_trait;
 use rand::RngCore;
 use secretspec_ipc::RequestId;
 use secretspec_ipc::error::{ErrorKind, RpcError};
-use secretspec_ipc::protocol::client::{
-    FileRepresentation, InitializeApplication, InitializedApplication, Manifest, MissingResult,
-    MissingStatus, ReleaseParams, ReleaseResult, Representation, ResolveParams, ResolveResult,
+use secretspec_ipc::protocol::resolver::{
+    FileRepresentation, GetParams, GetResult, InitializeApplication, InitializedApplication,
+    Manifest, MissingResult, MissingStatus, ReleaseParams, ReleaseResult, Representation,
     ResolvedFileResult, ResolvedStatus, ResolvedValueResult, Source, UndeclaredResult,
     UndeclaredStatus, ValueRepresentation,
 };
-use secretspec_ipc::resolution::{ResolutionHandler, serve_resolution};
+use secretspec_ipc::resolver::{ResolverHandler, serve_resolver};
 use secretspec_ipc::server::{RequestContext, RpcResult, ServerConfig};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -32,7 +32,7 @@ struct Lease {
     identity: same_file::Handle,
 }
 
-struct BrokerState {
+struct ResolverState {
     secrets: Arc<Secrets>,
     session_dir: PathBuf,
     leases: Mutex<HashMap<String, Lease>>,
@@ -43,12 +43,12 @@ struct BrokerState {
 }
 
 #[derive(Default)]
-struct BrokerHandler {
-    state: Mutex<Option<Arc<BrokerState>>>,
+struct ResolverHandlerImpl {
+    state: Mutex<Option<Arc<ResolverState>>>,
 }
 
-impl BrokerHandler {
-    async fn state(&self) -> RpcResult<Arc<BrokerState>> {
+impl ResolverHandlerImpl {
+    async fn state(&self) -> RpcResult<Arc<ResolverState>> {
         self.state
             .lock()
             .await
@@ -58,7 +58,7 @@ impl BrokerHandler {
 }
 
 #[async_trait]
-impl ResolutionHandler for BrokerHandler {
+impl ResolverHandler for ResolverHandlerImpl {
     async fn initialize(
         &self,
         _context: &RequestContext,
@@ -99,7 +99,7 @@ impl ResolutionHandler for BrokerHandler {
         .map_err(map_resolver_error)?;
 
         let (secrets, session_dir) = loaded;
-        let state = Arc::new(BrokerState {
+        let state = Arc::new(ResolverState {
             secrets: Arc::new(secrets),
             session_dir: session_dir.path().to_path_buf(),
             leases: Mutex::new(HashMap::new()),
@@ -119,11 +119,7 @@ impl ResolutionHandler for BrokerHandler {
         })
     }
 
-    async fn resolve(
-        &self,
-        context: RequestContext,
-        params: ResolveParams,
-    ) -> RpcResult<ResolveResult> {
+    async fn get(&self, context: RequestContext, params: GetParams) -> RpcResult<GetResult> {
         let state = self.state().await?;
         let name = params.name;
         let purpose = IpcAuditPurpose {
@@ -144,15 +140,13 @@ impl ResolutionHandler for BrokerHandler {
         }
 
         match resolved {
-            OwnedNamedResolution::Undeclared => Ok(ResolveResult::Undeclared(UndeclaredResult {
+            OwnedNamedResolution::Undeclared => Ok(GetResult::Undeclared(UndeclaredResult {
                 status: UndeclaredStatus::Undeclared,
             })),
-            OwnedNamedResolution::Missing { required } => {
-                Ok(ResolveResult::Missing(MissingResult {
-                    status: MissingStatus::Missing,
-                    required,
-                }))
-            }
+            OwnedNamedResolution::Missing { required } => Ok(GetResult::Missing(MissingResult {
+                status: MissingStatus::Missing,
+                required,
+            })),
             OwnedNamedResolution::Value {
                 value,
                 source,
@@ -165,7 +159,7 @@ impl ResolutionHandler for BrokerHandler {
                 }
                 retain_pending_supporting_files(&state, context.request_id, supporting_files)
                     .await?;
-                Ok(ResolveResult::Value(ResolvedValueResult {
+                Ok(GetResult::Value(ResolvedValueResult {
                     status: ResolvedStatus::Resolved,
                     representation: ValueRepresentation::Value,
                     value,
@@ -236,7 +230,7 @@ impl ResolutionHandler for BrokerHandler {
                     .lock()
                     .await
                     .insert(context.request_id, lease_id.clone());
-                Ok(ResolveResult::File(ResolvedFileResult {
+                Ok(GetResult::File(ResolvedFileResult {
                     status: ResolvedStatus::Resolved,
                     representation: FileRepresentation::File,
                     path: path.to_string_lossy().into_owned(),
@@ -368,7 +362,7 @@ fn harden_lease_file(_: &std::path::Path) -> std::io::Result<()> {
 }
 
 async fn retain_pending_supporting_files(
-    state: &BrokerState,
+    state: &ResolverState,
     request_id: RequestId,
     files: Vec<NamedTempFile>,
 ) -> RpcResult<()> {
@@ -523,13 +517,13 @@ fn map_resolver_error(error: SecretSpecError) -> RpcError {
 }
 
 pub(crate) async fn run_stdio() -> secretspec_ipc::Result<()> {
-    serve_resolution(
+    serve_resolver(
         tokio::io::stdin(),
         tokio::io::stdout(),
-        BrokerHandler::default(),
+        ResolverHandlerImpl::default(),
         ServerConfig {
             product: secretspec_ipc::Product {
-                name: "secretspec-broker".to_string(),
+                name: "secretspec-resolver".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
             ..ServerConfig::default()
@@ -542,8 +536,8 @@ pub(crate) async fn run_stdio() -> secretspec_ipc::Result<()> {
 mod tests {
     use super::*;
     use secretspec_ipc::client::Client;
-    use secretspec_ipc::protocol::client::{Purpose, method};
-    use secretspec_ipc::protocol::{CLIENT_PROTOCOL, InitializeParams, Limits, Product};
+    use secretspec_ipc::protocol::resolver::{Purpose, method};
+    use secretspec_ipc::protocol::{InitializeParams, Limits, Product, RESOLVER_PROTOCOL};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn deadline() -> u64 {
@@ -593,17 +587,17 @@ UNRELATED = { description = "must not fail named resolution", required = true }
         let (client_io, server_io) = tokio::io::duplex(64 * 1024);
         let (client_read, client_write) = tokio::io::split(client_io);
         let (server_read, server_write) = tokio::io::split(server_io);
-        let server = tokio::spawn(serve_resolution(
+        let server = tokio::spawn(serve_resolver(
             server_read,
             server_write,
-            BrokerHandler::default(),
+            ResolverHandlerImpl::default(),
             ServerConfig::default(),
         ));
         let initialize = InitializeParams {
-            protocol: CLIENT_PROTOCOL.to_string(),
+            protocol: RESOLVER_PROTOCOL.to_string(),
             versions: vec![1],
             client: Product {
-                name: "broker-test".to_string(),
+                name: "resolver-test".to_string(),
                 version: "1".to_string(),
             },
             limits: Limits {
@@ -637,8 +631,8 @@ UNRELATED = { description = "must not fail named resolution", required = true }
         };
         let value = client
             .call(
-                method::RESOLVE,
-                &ResolveParams {
+                method::GET,
+                &GetParams {
                     name: "TOKEN".to_string(),
                     representation: Representation::Value,
                     purpose: purpose.clone(),
@@ -649,13 +643,13 @@ UNRELATED = { description = "must not fail named resolution", required = true }
             .unwrap();
         assert!(matches!(
             value,
-            ResolveResult::Value(ResolvedValueResult { ref value, .. }) if value == "inline-value"
+            GetResult::Value(ResolvedValueResult { ref value, .. }) if value == "inline-value"
         ));
 
         let file = client
             .call(
-                method::RESOLVE,
-                &ResolveParams {
+                method::GET,
+                &GetParams {
                     name: "CERT".to_string(),
                     representation: Representation::File,
                     purpose,
@@ -664,7 +658,7 @@ UNRELATED = { description = "must not fail named resolution", required = true }
             )
             .await
             .unwrap();
-        let ResolveResult::File(file) = file else {
+        let GetResult::File(file) = file else {
             panic!("expected file result")
         };
         assert_eq!(std::fs::read_to_string(&file.path).unwrap(), "file-value");
@@ -712,7 +706,7 @@ CERT = { description = "certificate", as_path = true }
         )
         .unwrap();
 
-        let handler = BrokerHandler::default();
+        let handler = ResolverHandlerImpl::default();
         let initialize_context = RequestContext {
             request_id: RequestId::new(1).unwrap(),
             deadline: tokio::time::Instant::now() + std::time::Duration::from_secs(2),
@@ -735,13 +729,13 @@ CERT = { description = "certificate", as_path = true }
             .unwrap();
         let request_id = RequestId::new(2).unwrap();
         let result = handler
-            .resolve(
+            .get(
                 RequestContext {
                     request_id,
                     deadline: tokio::time::Instant::now() + std::time::Duration::from_secs(2),
                     cancellation: Default::default(),
                 },
-                ResolveParams {
+                GetParams {
                     name: "CERT".into(),
                     representation: Representation::File,
                     purpose: Purpose {
@@ -754,7 +748,7 @@ CERT = { description = "certificate", as_path = true }
             )
             .await
             .unwrap();
-        let ResolveResult::File(file) = result else {
+        let GetResult::File(file) = result else {
             panic!("expected file result")
         };
         assert!(std::path::Path::new(&file.path).exists());

@@ -14,3 +14,12 @@ cargo check -p secretspec-ipc --no-default-features
 
 The default `tokio` feature enables async transports, clients, servers, process
 launch, and handler adapters.
+
+The `blocking` feature adds a synchronous `secretspec.resolver/1` session over
+`std::process`, for a consumer that has no async runtime and should not acquire
+one. It reuses the same framing, envelopes, and validation, and adds no
+dependency beyond the runtime-independent set:
+
+```console
+cargo check -p secretspec-ipc --no-default-features --features blocking
+```

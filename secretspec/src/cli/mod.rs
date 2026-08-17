@@ -241,12 +241,14 @@ enum Commands {
         #[command(subcommand)]
         action: CacheAction,
     },
-    /// Run the private stdio resolution broker (0.20+)
-    Broker {
-        /// Serve one Secret Resolution Protocol session over stdin/stdout
-        #[arg(long)]
-        stdio: bool,
-    },
+    /// Serve one `secretspec.resolver/1` session over stdin and stdout (0.20+)
+    ///
+    /// The session is a private child of whoever launched it: it exchanges
+    /// framed IPC on the standard streams, never prompts on them, and exits
+    /// with its parent. A future daemon mode would instead expose a socket
+    /// other local processes can reach, so that mode has to be asked for while
+    /// this one does not.
+    Serve,
     /// Show the local audit log of secret access
     Audit {
         /// Only show entries for this project
@@ -1584,14 +1586,9 @@ pub fn main() -> Result<()> {
                 Ok(())
             }
         },
-        Commands::Broker { stdio } => {
-            if !stdio {
-                return Err(miette!("broker version 1 requires --stdio"));
-            }
-            crate::provider::block_on(crate::broker::run_stdio())
-                .into_diagnostic()
-                .wrap_err("SecretSpec broker failed")
-        }
+        Commands::Serve => crate::provider::block_on(crate::serve::run_stdio())
+            .into_diagnostic()
+            .wrap_err("SecretSpec resolver failed"),
         // Show the local audit log
         Commands::Audit {
             project,

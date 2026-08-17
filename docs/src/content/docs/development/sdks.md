@@ -38,9 +38,9 @@ cross-language conformance suite (`conformance/`, run by
 inputs to the same result.
 
 This embedded boundary remains supported. SecretSpec 0.20+'s
-[IPC architecture](/reference/ipc-architecture) adds an explicit broker option
+[IPC architecture](/reference/ipc-architecture) adds an explicit resolver option
 for applications that cannot or should not link the resolver and its provider
-graph. Its [Secret Resolution Protocol](/reference/client-protocol) is a
+graph. Its [Secret Resolution Protocol](/reference/resolver-protocol) is a
 versioned process boundary; it does not replace `libsecretspec` or silently
 change how existing SDK packages run. See
 [Implementing SecretSpec IPC](/development/ipc-implementation) for the 0.20+
@@ -193,8 +193,8 @@ linker prefers a shared library when both forms are present.
    with the target version until the release ships (see
    [Adding Providers](/development/adding-providers)).
 
-If the SDK offers broker mode (SecretSpec 0.20+), keep it an explicit backend choice and run the
-IPC conformance suite in addition to the embedded SDK suite. Broker mode must
+If the SDK offers resolver mode (SecretSpec 0.20+), keep it an explicit backend choice and run the
+IPC conformance suite in addition to the embedded SDK suite. Resolver mode must
 use the Rust `secretspec-ipc` client in Rust or bind the pure-C
 `libsecretspec-ipc` client in non-Rust SDKs. The wire protocol remains canonical
 for independent implementations, but supported language bindings must not

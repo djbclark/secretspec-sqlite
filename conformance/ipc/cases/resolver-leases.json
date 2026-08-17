@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "id": "broker.file-leases",
-  "targets": ["broker", "rust-server"],
+  "id": "resolver.file-leases",
+  "targets": ["resolver", "rust-server"],
   "timeout_ms": 10000,
   "actions": [
     {"kind": "initialize", "manifest": "inline", "profile": "default"},

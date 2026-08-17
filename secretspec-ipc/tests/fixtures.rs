@@ -14,7 +14,7 @@ fn schemas_openrpc_and_fixtures_are_valid_json() {
     let root = schema_root();
     let schemas = [
         "common.schema.json",
-        "client.schema.json",
+        "resolver.schema.json",
         "provider.schema.json",
     ]
     .map(|name| {
@@ -23,7 +23,7 @@ fn schemas_openrpc_and_fixtures_are_valid_json() {
         assert!(value.is_object(), "{name}");
         (name, value)
     });
-    for name in ["client.openrpc.json", "provider.openrpc.json"] {
+    for name in ["resolver.openrpc.json", "provider.openrpc.json"] {
         let bytes = fs::read(root.join(name)).unwrap();
         let value: Value = serde_json::from_slice(&bytes).unwrap();
         assert!(value.is_object(), "{name}");
@@ -38,7 +38,7 @@ fn schemas_openrpc_and_fixtures_are_valid_json() {
         .prepare()
         .expect("schema registry resolves every reference");
 
-    for role in ["wire", "client", "provider"] {
+    for role in ["wire", "resolver", "provider"] {
         for entry in fs::read_dir(root.join("fixtures").join(role)).unwrap() {
             let path = entry.unwrap().path();
             let bytes = fs::read(&path).unwrap();
@@ -77,9 +77,9 @@ fn method_catalogs_match_openrpc() {
     let root = schema_root();
     let cases = [
         (
-            "client.openrpc.json",
-            "client.",
-            secretspec_ipc::protocol::client::CAPABILITIES,
+            "resolver.openrpc.json",
+            "resolver.",
+            secretspec_ipc::protocol::resolver::CAPABILITIES,
         ),
         (
             "provider.openrpc.json",
@@ -124,24 +124,24 @@ fn fixture_schema<'a>(role: &str, path: &Path, envelope: &'a Value) -> (&'static
             ),
             &envelope["params"],
         ),
-        ("client", "initialize-request.json") => (
-            "https://secretspec.dev/schema/ipc/v1/client.schema.json#/$defs/InitializeParams",
+        ("resolver", "initialize-request.json") => (
+            "https://secretspec.dev/schema/ipc/v1/resolver.schema.json#/$defs/InitializeParams",
             &envelope["params"],
         ),
-        ("client", "initialize-result.json") => (
-            "https://secretspec.dev/schema/ipc/v1/client.schema.json#/$defs/InitializeResult",
+        ("resolver", "initialize-result.json") => (
+            "https://secretspec.dev/schema/ipc/v1/resolver.schema.json#/$defs/InitializeResult",
             &envelope["result"],
         ),
-        ("client", "resolve-request.json") => (
-            "https://secretspec.dev/schema/ipc/v1/client.schema.json#/$defs/ResolveParams",
+        ("resolver", "get-request.json") => (
+            "https://secretspec.dev/schema/ipc/v1/resolver.schema.json#/$defs/GetParams",
             &envelope["params"],
         ),
-        ("client", "resolve-value-result.json") => (
-            "https://secretspec.dev/schema/ipc/v1/client.schema.json#/$defs/ResolveResult",
+        ("resolver", "get-value-result.json") => (
+            "https://secretspec.dev/schema/ipc/v1/resolver.schema.json#/$defs/GetResult",
             &envelope["result"],
         ),
-        ("client", "release-request.json") => (
-            "https://secretspec.dev/schema/ipc/v1/client.schema.json#/$defs/ReleaseParams",
+        ("resolver", "release-request.json") => (
+            "https://secretspec.dev/schema/ipc/v1/resolver.schema.json#/$defs/ReleaseParams",
             &envelope["params"],
         ),
         ("provider", "initialize-request.json") => (

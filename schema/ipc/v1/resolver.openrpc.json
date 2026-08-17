@@ -7,19 +7,19 @@
   "methods": [
     {
       "name": "rpc.initialize",
-      "params": [{ "name": "params", "required": true, "schema": { "$ref": "client.schema.json#/$defs/InitializeParams" } }],
-      "result": { "name": "result", "schema": { "$ref": "client.schema.json#/$defs/InitializeResult" } }
+      "params": [{ "name": "params", "required": true, "schema": { "$ref": "resolver.schema.json#/$defs/InitializeParams" } }],
+      "result": { "name": "result", "schema": { "$ref": "resolver.schema.json#/$defs/InitializeResult" } }
     },
     {
-      "name": "client.resolve",
-      "params": [{ "name": "params", "required": true, "schema": { "$ref": "client.schema.json#/$defs/ResolveParams" } }],
-      "result": { "name": "result", "schema": { "$ref": "client.schema.json#/$defs/ResolveResult" } },
+      "name": "resolver.get",
+      "params": [{ "name": "params", "required": true, "schema": { "$ref": "resolver.schema.json#/$defs/GetParams" } }],
+      "result": { "name": "result", "schema": { "$ref": "resolver.schema.json#/$defs/GetResult" } },
       "errors": [{ "$ref": "#/components/errors/CommonError" }]
     },
     {
-      "name": "client.release",
-      "params": [{ "name": "params", "required": true, "schema": { "$ref": "client.schema.json#/$defs/ReleaseParams" } }],
-      "result": { "name": "result", "schema": { "$ref": "client.schema.json#/$defs/ReleaseResult" } },
+      "name": "resolver.release",
+      "params": [{ "name": "params", "required": true, "schema": { "$ref": "resolver.schema.json#/$defs/ReleaseParams" } }],
+      "result": { "name": "result", "schema": { "$ref": "resolver.schema.json#/$defs/ReleaseResult" } },
       "errors": [{ "$ref": "#/components/errors/CommonError" }]
     },
     {

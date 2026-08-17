@@ -500,7 +500,7 @@ enum PreparedSecret {
 }
 
 /// Named resolution with temporary-file ownership retained by the caller.
-/// The broker converts these owners into session leases; the embedded API
+/// The resolver converts these owners into session leases; the embedded API
 /// persists them to preserve its existing one-shot path behavior.
 pub(crate) enum OwnedNamedResolution {
     Undeclared,
@@ -639,13 +639,13 @@ pub struct Secrets {
     global_config: Option<GlobalConfig>,
     /// The provider to use (if set via builder)
     provider: Option<String>,
-    /// Broker sessions fix provider selection at initialization and must not
-    /// inherit the broker process's provider environment.
+    /// Resolver sessions fix provider selection at initialization and must not
+    /// inherit the resolver process's provider environment.
     ignore_ambient_provider: bool,
     /// The profile to use (if set via builder)
     profile: Option<String>,
-    /// Broker sessions fix profile selection at initialization and must not
-    /// inherit the broker process's profile environment.
+    /// Resolver sessions fix profile selection at initialization and must not
+    /// inherit the resolver process's profile environment.
     ignore_ambient_profile: bool,
     /// The active secret scope (if set via builder/`--scope`/`SECRETSPEC_SCOPE`).
     /// `None` resolves the complete profile; a scope narrows resolution to the
@@ -997,7 +997,7 @@ impl Secrets {
         Self::from_compiled_spec(config, manifest, base_dir.into(), true)
     }
 
-    /// Load an explicit path for a broker session without consulting ambient
+    /// Load an explicit path for a resolver session without consulting ambient
     /// provider, profile, scope, or reason variables.
     #[cfg(feature = "cli")]
     pub(crate) fn load_from_ipc(path: &Path) -> Result<Self> {
@@ -1010,7 +1010,7 @@ impl Secrets {
         Self::from_compiled_spec(config, manifest, config_dir, false)
     }
 
-    /// Parse an inline broker manifest with inheritance rooted at `base_dir`.
+    /// Parse an inline resolver manifest with inheritance rooted at `base_dir`.
     #[cfg(feature = "cli")]
     pub(crate) fn load_inline_ipc(source: &str, base_dir: &Path) -> Result<Self> {
         let config = Config::from_inline(source, base_dir)?;
@@ -4972,14 +4972,14 @@ impl Secrets {
         self.resolve_named_within(name, Surface::Scoped)
     }
 
-    /// Broker-only named resolution that retains every materialized file owner
+    /// Resolver-only named resolution that retains every materialized file owner
     /// instead of persisting paths beyond the resolver process.
     #[cfg(feature = "cli")]
     pub(crate) fn resolve_named_owned(&self, name: &str) -> Result<OwnedNamedResolution> {
         self.resolve_named_owned_within(name, Surface::Scoped)
     }
 
-    /// Broker-mode resolution with structured caller attribution scoped to the
+    /// Resolver-mode resolution with structured caller attribution scoped to the
     /// blocking worker that performs the read (0.20+).
     #[cfg(feature = "cli")]
     pub(crate) fn resolve_named_owned_for_ipc(
@@ -5119,7 +5119,7 @@ impl Secrets {
                     // Every resolution branch materializes an `as_path` value
                     // through `insert_resolved`, so the owner is expected to be
                     // present. This stays an error rather than a panic because
-                    // it runs inside the public SDK entry point and the broker's
+                    // it runs inside the public SDK entry point and the resolver's
                     // blocking worker, where every other failure is recoverable.
                     let target = supporting_files
                         .iter()

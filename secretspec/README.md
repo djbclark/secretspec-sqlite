@@ -26,6 +26,7 @@ SecretSpec fixes this by separating secret **declaration** from secret **storage
 - **[Declarative Configuration](https://secretspec.dev/reference/configuration/)**: Define your secrets in `secretspec.toml` with descriptions and requirements
 - **[Multiple Provider Backends](https://secretspec.dev/concepts/providers/)**:
   - [Keyring](https://secretspec.dev/providers/keyring)
+  - [Factorseal](https://secretspec.dev/providers/factorseal)
   - [KeePass KDBX](https://secretspec.dev/providers/kdbx) (0.17+)
   - [.env](https://secretspec.dev/providers/dotenv)
   - [plaintext files](https://secretspec.dev/providers/file) (0.19+)
@@ -201,6 +202,7 @@ Learn more about [profiles](https://secretspec.dev/concepts/profiles) and [profi
 SecretSpec supports multiple storage backends for secrets:
 
 - **[Keyring](https://secretspec.dev/providers/keyring)** - System credential store (recommended)
+- **[Factorseal](https://secretspec.dev/providers/factorseal)** - Hardware-bound local device cache through the native Factorseal agent
 - **[KeePass KDBX](https://secretspec.dev/providers/kdbx)** (0.17+) - Local KeePass-compatible encrypted database
 - **[.env files](https://secretspec.dev/providers/dotenv)** - Traditional dotenv files
 - **[Plaintext files](https://secretspec.dev/providers/file)** (0.19+) - One UTF-8 file per secret in a local directory tree
@@ -320,7 +322,7 @@ secretspec run -- command        # Run command with secrets as env vars
 
 # Inspect access
 secretspec audit                 # Show the local audit log of secret access
-secretspec broker --stdio        # Private SDK resolution broker (0.20+)
+secretspec serve        # Private SDK resolver session (0.20+)
 
 # Enable contextual Fish completions for this session (0.20+)
 secretspec completions fish | source

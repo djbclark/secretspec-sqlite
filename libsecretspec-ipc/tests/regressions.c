@@ -16,7 +16,7 @@
 #endif
 
 static const char client_initialize[] =
-    "{\"protocol\":\"secretspec.client\",\"versions\":[1],"
+    "{\"protocol\":\"secretspec.resolver\",\"versions\":[1],"
     "\"client\":{\"name\":\"c-test\",\"version\":\"1\"},"
     "\"limits\":{\"max_frame_bytes\":32768,\"max_in_flight\":4},"
     "\"application\":{}}";
@@ -135,7 +135,7 @@ static int freed_calls_expire(const char *peer) {
         static const unsigned char params[] = "{}";
         uint64_t deadline = now_ms() + UINT64_C(100);
         status = secretspec_ipc_call_start(
-            client, (const unsigned char *)"client.resolve", strlen("client.resolve"),
+            client, (const unsigned char *)"resolver.get", strlen("resolver.get"),
             params, sizeof(params) - 1, deadline, &call, &error);
         if (status != SECRETSPEC_IPC_OK) goto failed;
         secretspec_ipc_call_free(call);
@@ -146,7 +146,7 @@ static int freed_calls_expire(const char *peer) {
         static const unsigned char params[] = "{}";
         uint64_t deadline = now_ms() + UINT64_C(1000);
         status = secretspec_ipc_call_start(
-            client, (const unsigned char *)"client.resolve", strlen("client.resolve"),
+            client, (const unsigned char *)"resolver.get", strlen("resolver.get"),
             params, sizeof(params) - 1, deadline, &call, &error);
         if (status != SECRETSPEC_IPC_OK) goto failed;
     }

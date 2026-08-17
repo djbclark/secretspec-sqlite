@@ -8,7 +8,11 @@ pub mod deadline;
 pub mod error;
 pub mod frame;
 pub mod jsonrpc;
+pub mod launch;
 pub mod protocol;
+
+#[cfg(feature = "blocking")]
+pub mod blocking;
 
 #[cfg(feature = "tokio")]
 pub mod client;
@@ -17,7 +21,7 @@ pub mod lifecycle;
 #[cfg(feature = "tokio")]
 pub mod provider;
 #[cfg(feature = "tokio")]
-pub mod resolution;
+pub mod resolver;
 #[cfg(feature = "tokio")]
 pub mod server;
 

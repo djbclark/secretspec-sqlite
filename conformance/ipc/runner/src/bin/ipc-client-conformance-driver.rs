@@ -136,7 +136,7 @@ fn scenario(case: &Case) -> Result<Scenario, String> {
         }
         "client.lifecycle" => {
             let initialize = require_action(&case.actions, "initialize")?;
-            if initialize.get("protocol").and_then(Value::as_str) != Some("secretspec.client")
+            if initialize.get("protocol").and_then(Value::as_str) != Some("secretspec.resolver")
                 || initialize.get("version").and_then(Value::as_u64) != Some(1)
             {
                 return Err("client lifecycle selects an unsupported protocol".into());
@@ -202,7 +202,7 @@ fn event(kind: &str) -> Value {
 
 fn initialize_params() -> InitializeParams<Value> {
     InitializeParams {
-        protocol: "secretspec.client".into(),
+        protocol: "secretspec.resolver".into(),
         versions: vec![1],
         client: Product {
             name: "conformance-driver".into(),

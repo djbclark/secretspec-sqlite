@@ -3,7 +3,7 @@ use crate::{ABSOLUTE_MAX_FRAME_BYTES, MAX_IN_FLIGHT, MIN_FRAME_BYTES};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const CLIENT_PROTOCOL: &str = "secretspec.client";
+pub const RESOLVER_PROTOCOL: &str = "secretspec.resolver";
 pub const PROVIDER_PROTOCOL: &str = "secretspec.provider";
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -180,15 +180,15 @@ where
     Option::<T>::deserialize(deserializer)
 }
 
-pub mod client {
+pub mod resolver {
     use super::*;
 
     pub mod method {
-        pub const RESOLVE: &str = "client.resolve";
-        pub const RELEASE: &str = "client.release";
+        pub const GET: &str = "resolver.get";
+        pub const RELEASE: &str = "resolver.release";
     }
 
-    pub const CAPABILITIES: &[&str] = &[method::RESOLVE, method::RELEASE];
+    pub const CAPABILITIES: &[&str] = &[method::GET, method::RELEASE];
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -301,13 +301,13 @@ pub mod client {
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(deny_unknown_fields)]
-    pub struct ResolveParams {
+    pub struct GetParams {
         pub name: String,
         pub representation: Representation,
         pub purpose: Purpose,
     }
 
-    impl ResolveParams {
+    impl GetParams {
         pub fn validate(&self) -> Result<()> {
             validate_nonempty_bytes("secret name has an invalid byte length", &self.name, 4096)?;
             self.purpose.validate()
@@ -395,7 +395,7 @@ pub mod client {
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(untagged)]
-    pub enum ResolveResult {
+    pub enum GetResult {
         Undeclared(UndeclaredResult),
         Missing(MissingResult),
         Value(ResolvedValueResult),
@@ -1111,7 +1111,7 @@ mod tests {
     #[test]
     fn schema_required_nullable_members_cannot_be_omitted() {
         assert!(
-            serde_json::from_value::<client::InitializeApplication>(serde_json::json!({
+            serde_json::from_value::<resolver::InitializeApplication>(serde_json::json!({
                 "manifest": {"kind": "path", "path": "/tmp/secretspec.toml"},
                 "provider": null,
                 "profile": null,

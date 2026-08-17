@@ -34,7 +34,7 @@ builds at the same time: today no workflow exercises either, so both are
 effectively untested. Only the cc-rs path in `build.rs` runs in CI.
 
 One library serves both IPC boundaries: initialization selects either
-`secretspec.client/1` (application/SDK to broker) or `secretspec.provider/1`
+`secretspec.resolver/1` (application/SDK to resolver) or `secretspec.provider/1`
 (SecretSpec to an external provider), and the method sets cannot be mixed on a
 session. This is separate from `libsecretspec`, the embedded in-process resolver
 ABI.

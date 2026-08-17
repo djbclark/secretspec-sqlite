@@ -1,7 +1,7 @@
 # SecretSpec IPC conformance suite
 
 This directory contains the language-neutral cases for
-`secretspec.client/1`, `secretspec.provider/1`, and the shared wire protocol.
+`secretspec.resolver/1`, `secretspec.provider/1`, and the shared wire protocol.
 It is available with SecretSpec 0.20+.
 
 Run the checked-in case and fixture validation with:
@@ -53,13 +53,13 @@ isolation across provider URIs and reasons:
 cargo test -p secretspec-ipc-conformance --test provider_cases
 ```
 
-The broker case is consumed by an integration test that launches the real
-`secretspec broker --stdio` executable. It verifies inline initialization,
+The resolver case is consumed by an integration test that launches the real
+`secretspec serve` executable. It verifies inline initialization,
 exact-name value/missing/undeclared results, file mode, duplicate release, and
 disconnect cleanup:
 
 ```console
-cargo test -p secretspec --test ipc_broker
+cargo test -p secretspec --test ipc_resolver
 ```
 
 `cases/` is canonical test data rather than executable expectations hidden in
