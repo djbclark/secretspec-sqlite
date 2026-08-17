@@ -1,7 +1,8 @@
 use crate::config::{Config, GlobalConfig, GlobalDefaults, Profile as ConfigProfile, Project};
 use crate::provider::{Provider, providers, spec_names_known_provider};
 use crate::{CallerContext, ExportFormat, Secrets};
-use clap::{Parser, Subcommand, ValueEnum, ValueHint};
+use clap::parser::ValueSource;
+use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum, ValueHint};
 use miette::{IntoDiagnostic, Result, WrapErr, miette};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -11,6 +12,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 mod completion;
+mod git;
+
+use git::GitAction;
 
 /// Main CLI structure for the secretspec application.
 ///
@@ -68,6 +72,49 @@ enum CompletionShell {
     PowerShell,
     /// Z shell
     Zsh,
+}
+
+/// Records which env-backed options the user actually typed.
+///
+/// `secretspec git configure` writes some of these into Git configuration
+/// permanently and rejects others as unsupported. Clap cannot tell the two
+/// apart on its own: an exported `SECRETSPEC_PROVIDER` looks exactly like
+/// `--provider` on the command line, so without this an ambient variable would
+/// be baked into a credential helper, or trigger an error naming a flag that
+/// was never passed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TypedArgs {
+    pub file: bool,
+    pub profile: bool,
+    pub provider: bool,
+    pub reason: bool,
+}
+
+impl TypedArgs {
+    /// Walks the whole subcommand chain. Clap propagates a global option's
+    /// value source to every level, while a subcommand's own options appear
+    /// only on its leaf.
+    fn from_matches(matches: &ArgMatches) -> Self {
+        let mut typed = Self::default();
+        let mut current = Some(matches);
+        while let Some(matches) = current {
+            for (id, typed) in [
+                ("file", &mut typed.file),
+                ("profile", &mut typed.profile),
+                ("provider", &mut typed.provider),
+                ("reason", &mut typed.reason),
+            ] {
+                // value_source panics on an id the current level does not define.
+                if matches.ids().any(|known| known.as_str() == id)
+                    && matches.value_source(id) == Some(ValueSource::CommandLine)
+                {
+                    *typed = true;
+                }
+            }
+            current = matches.subcommand().map(|(_, matches)| matches);
+        }
+        typed
+    }
 }
 
 /// Available commands for the secretspec CLI.
@@ -226,6 +273,11 @@ enum Commands {
     Config {
         #[command(subcommand)]
         action: ConfigAction,
+    },
+    #[command(about = "Configure Git HTTP(S) or SMTP credentials through SecretSpec (0.20+)")]
+    Git {
+        #[command(subcommand)]
+        action: GitAction,
     },
     /// Import secrets from a provider to another provider
     Import {
@@ -910,7 +962,12 @@ fn caller_context(cli: &Cli) -> Result<Option<CallerContext>> {
 #[doc(hidden)]
 pub fn main() -> Result<()> {
     completion::complete();
-    let cli = Cli::parse();
+    let matches = Cli::command().get_matches();
+    let typed = TypedArgs::from_matches(&matches);
+    let cli = match Cli::from_arg_matches(&matches) {
+        Ok(cli) => cli,
+        Err(error) => error.exit(),
+    };
     let caller = caller_context(&cli)?;
 
     match cli.command {
@@ -1080,6 +1137,7 @@ pub fn main() -> Result<()> {
             );
             Ok(())
         }
+        Commands::Git { action } => git::run(action, &cli.file, &cli.reason, &caller, typed),
         // Handle configuration management commands
         Commands::Config { action } => match normalize_config_action(action) {
             ConfigAction::Global { .. } => unreachable!("global action was normalized"),
