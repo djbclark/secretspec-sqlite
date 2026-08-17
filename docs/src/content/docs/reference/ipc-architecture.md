@@ -86,27 +86,30 @@ offer `embedded` and `broker` backends behind the same language-level API.
 ### Why not Varlink?
 
 [Varlink](https://varlink.org/) supplies an interface language, local service
-discovery conventions, framing, and RPC semantics. SecretSpec would still need
-to specify capabilities, exact-name resolution, leased files, deadlines,
-cancellation, provider addresses, destructive operations, and its trust model.
+discovery conventions, framing, typed errors, streaming replies, and runtime
+introspection. The maintained [zlink](https://docs.rs/zlink/0.7.0/zlink/)
+implementation also provides async Rust clients and services, code generation,
+and Tokio and smol integrations. SecretSpec does not use it for four reasons:
 
-The maintained [Varlink Rust implementation](https://github.com/varlink/rust)
-has a runtime-independent sans-I/O core and optional Tokio async client/server
-support. Lack of asynchronous Rust support is therefore **not** a reason for
-this decision. Async I/O is distinct from multiplexing, however: Varlink
-returns responses in request order, its Rust client permits one active call per
-connection, and the async server awaits that connection's handler before
-reading its next request. The wire protocol has no request ID with which to
-target cancellation or correlate an out-of-order terminal response.
+- **No multiplexing.** Varlink pipelines calls in order but has no request IDs.
+  One blocked call delays later replies and cannot be cancelled independently.
+  A pool of connections avoids this, but adds channel scheduling, descriptor
+  limits, and replacement after cancellation.
+- **Portability.** Version 1 requires private stdio sessions on Linux, macOS,
+  and Windows plus a pure-C client. zlink is Rust-only and its ready-made
+  transport is Unix-domain sockets. Passing anonymous sockets is a
+  transport-specific zlink extension, not standard Varlink, and Windows would
+  need a separate handle-transfer design.
+- **Missing lifecycle semantics.** SecretSpec would still have to define
+  version and capability negotiation, deadlines, cancellation, message bounds,
+  leases, shutdown, and the trust model.
+- **No net simplification.** Named sockets require authentication, permissions,
+  discovery, and stale-socket cleanup. Connection pools replace the current
+  request-ID table with another security-sensitive state machine.
 
-SecretSpec must continue reading and cancel one request while another handler
-is blocked. Achieving that with Varlink would require a connection per active
-request or a SecretSpec-specific request-ID, cancellation, deadline, bounded
-message, and concurrency extension. The former does not fit one stateful stdio
-child session; the latter replaces enough Varlink semantics that its simplicity
-advantage largely disappears. Varlink remains a viable transport adapter or a
-candidate if those constraints change, but it does not remove the application
-and lifecycle protocol defined here.
+See Varlink's documentation on
+[ordered connections](https://varlink.org/FAQ.html#why-are-there-no-sequence-numbers-in-calls-and-replies)
+and [transport-specific file descriptors](https://varlink.org/FAQ.html#can-i-transmit-file-descriptors).
 
 [JSON-RPC 2.0](https://www.jsonrpc.org/specification) gives SecretSpec stable
 request correlation, method names, results, and errors while leaving transport
@@ -115,8 +118,9 @@ cancellation rules are small enough to specify here and implement without a
 large runtime.
 
 This is a portability and dependency decision, not a claim that Varlink is a
-bad protocol. A Varlink adapter could be added later without changing the
-canonical SecretSpec application methods.
+bad protocol. Varlink improves interface description and generated Rust APIs,
+but does not simplify SecretSpec's required lifecycle. A Unix Varlink adapter
+could still be added later without changing the canonical application methods.
 
 ## Layer ownership
 
