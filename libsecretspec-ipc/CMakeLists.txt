@@ -3,6 +3,7 @@ project(libsecretspec_ipc VERSION 1.0.0 LANGUAGES C)
 
 option(SECRETSPEC_IPC_BUILD_TESTS "Build C client tests" ON)
 
+include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 
 set(SECRETSPEC_IPC_SOURCES
@@ -74,15 +75,25 @@ add_library(secretspec_ipc_shared SHARED
     ${SECRETSPEC_IPC_SHARED_OBJECTS}
     $<TARGET_OBJECTS:yyjson_objects>)
 set_target_properties(secretspec_ipc_static PROPERTIES OUTPUT_NAME secretspec-ipc)
-set_target_properties(secretspec_ipc_shared PROPERTIES OUTPUT_NAME secretspec-ipc)
+set_target_properties(secretspec_ipc_shared PROPERTIES
+    OUTPUT_NAME secretspec-ipc
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR})
 target_link_libraries(secretspec_ipc_static PUBLIC Threads::Threads)
 target_link_libraries(secretspec_ipc_shared PUBLIC Threads::Threads)
 target_compile_definitions(secretspec_ipc_shared PUBLIC SECRETSPEC_IPC_SHARED)
 target_include_directories(secretspec_ipc_static PUBLIC include)
 target_include_directories(secretspec_ipc_shared PUBLIC include)
 
-install(TARGETS secretspec_ipc_static secretspec_ipc_shared)
-install(FILES include/secretspec_ipc.h DESTINATION include)
+install(TARGETS secretspec_ipc_static secretspec_ipc_shared
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES include/secretspec_ipc.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+configure_file(secretspec-ipc.pc.in secretspec-ipc.pc @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/secretspec-ipc.pc
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 if(SECRETSPEC_IPC_BUILD_TESTS)
   enable_testing()

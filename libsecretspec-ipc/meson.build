@@ -2,7 +2,15 @@ project(
   'libsecretspec-ipc',
   'c',
   version: '1.0.0',
-  default_options: ['c_std=c11', 'warning_level=3', 'werror=true'],
+  # Nix development environments define _FORTIFY_SOURCE, which requires an
+  # optimised build. Keep the strict warnings while making the default usable
+  # in those environments.
+  default_options: [
+    'buildtype=debugoptimized',
+    'c_std=c11',
+    'warning_level=3',
+    'werror=true',
+  ],
 )
 
 threads = dependency('threads')
@@ -36,10 +44,20 @@ shared_lib = shared_library(
   dependencies: threads,
   c_args: common_c_args + ['-DSECRETSPEC_IPC_SHARED'],
   gnu_symbol_visibility: 'hidden',
+  soversion: '1',
   install: true,
 )
 
 install_headers('include/secretspec_ipc.h')
+
+pkgconfig = import('pkgconfig')
+pkgconfig.generate(
+  shared_lib,
+  filebase: 'secretspec-ipc',
+  name: 'libsecretspec-ipc',
+  description: 'SecretSpec local IPC C client',
+  version: meson.project_version(),
+)
 
 smoke = executable(
   'secretspec_ipc_smoke',

@@ -130,6 +130,16 @@ jobs:
       run: cargo clippy --workspace --exclude secretspec-php-native
     - name: Run tests
       run: cargo test --workspace --exclude secretspec-php-native
+    - name: Build standalone C IPC client with Meson
+      run: |
+        devenv shell -- meson setup libsecretspec-ipc/build-meson libsecretspec-ipc
+        devenv shell -- meson compile -C libsecretspec-ipc/build-meson
+        devenv shell -- meson test -C libsecretspec-ipc/build-meson --print-errorlogs
+    - name: Build standalone C IPC client with CMake
+      run: |
+        devenv shell -- cmake -S libsecretspec-ipc -B libsecretspec-ipc/build-cmake
+        devenv shell -- cmake --build libsecretspec-ipc/build-cmake
+        devenv shell -- ctest --test-dir libsecretspec-ipc/build-cmake --output-on-failure
 
   # Each optional provider must compile on its own, not just in the default
   # feature set. `cargo test` above cannot catch a missing feature gate: it
