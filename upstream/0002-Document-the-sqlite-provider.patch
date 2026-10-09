@@ -1,0 +1,377 @@
+From 50d3e2b2a1e8a8d46d8431e1286c19ecd7b6d012 Mon Sep 17 00:00:00 2001
+From: Daniel JB Clark <djbclark@gmail.com>
+Date: Fri, 9 Oct 2026 01:33:04 -0400
+Subject: [PATCH 2/2] Document the sqlite provider
+
+Add the provider page and list the provider in every place the
+AGENTS.md checklist names: sidebar and llms description, available
+providers table, providers reference section and security table, landing
+page metadata and hero, quick start, and README. Every mention carries the
+0.22+ target version.
+---
+ docs/astro.config.ts                          |   7 +-
+ docs/src/content/docs/concepts/providers.mdx  |   1 +
+ docs/src/content/docs/providers/sqlite.mdx    | 207 ++++++++++++++++++
+ docs/src/content/docs/quick-start.mdx         |   1 +
+ docs/src/content/docs/reference/providers.mdx |  25 +++
+ docs/src/pages/index.astro                    |   2 +
+ secretspec/README.md                          |   3 +
+ 7 files changed, 245 insertions(+), 1 deletion(-)
+ create mode 100644 docs/src/content/docs/providers/sqlite.mdx
+
+diff --git a/docs/astro.config.ts b/docs/astro.config.ts
+index 1a7c461..53fb8f6 100644
+--- a/docs/astro.config.ts
++++ b/docs/astro.config.ts
+@@ -84,7 +84,7 @@ $ secretspec import dotenv://.env.production
+ 
+ ## Providers
+ 
+-Values can be resolved from: keyring (default), KeePass KDBX (0.17+), dotenv files, plaintext file directories (0.19+), EJSON files (0.20+, read-only), environment variables, systemd service credentials (0.17+), 1Password, Gopass (0.15+), LastPass, Dashlane (0.18+, read-only), Pass, Proton Pass, Passbolt (0.19+), Keeper Secrets Manager (0.18+), Doppler (0.21+), Google Cloud Secret Manager, AWS Secrets Manager, AWS Systems Manager Parameter Store (0.18+), Scaleway Secret Manager (0.17+), Tailscale Setec (0.21+), HashiCorp Vault, OpenBao (0.17+), Bitwarden Password Manager (0.18+), Bitwarden Secrets Manager, Azure Key Vault, Azure App Configuration (0.20+), Infisical (0.16+), age (0.17+), SOPS (0.17+), or Kubernetes (0.20+). Fly.io application secrets and Cloudflare Secrets Store entries can be published through the write-only fly and cloudflare providers (0.20+). The null provider (0.19+) uses manifest defaults, ephemeral generation, or ephemeral run prompts without storage.`,
++Values can be resolved from: keyring (default), KeePass KDBX (0.17+), dotenv files, plaintext file directories (0.19+), SQLite databases (0.22+), EJSON files (0.20+, read-only), environment variables, systemd service credentials (0.17+), 1Password, Gopass (0.15+), LastPass, Dashlane (0.18+, read-only), Pass, Proton Pass, Passbolt (0.19+), Keeper Secrets Manager (0.18+), Doppler (0.21+), Google Cloud Secret Manager, AWS Secrets Manager, AWS Systems Manager Parameter Store (0.18+), Scaleway Secret Manager (0.17+), Tailscale Setec (0.21+), HashiCorp Vault, OpenBao (0.17+), Bitwarden Password Manager (0.18+), Bitwarden Secrets Manager, Azure Key Vault, Azure App Configuration (0.20+), Infisical (0.16+), age (0.17+), SOPS (0.17+), or Kubernetes (0.20+). Fly.io application secrets and Cloudflare Secrets Store entries can be published through the write-only fly and cloudflare providers (0.20+). The null provider (0.19+) uses manifest defaults, ephemeral generation, or ephemeral run prompts without storage.`,
+         )),
+       ],
+       title: "SecretSpec",
+@@ -229,6 +229,11 @@ Values can be resolved from: keyring (default), KeePass KDBX (0.17+), dotenv fil
+               slug: "providers/file",
+               badge: { text: "0.19+", variant: "note" },
+             },
++            {
++              label: "SQLite",
++              slug: "providers/sqlite",
++              badge: { text: "0.22+", variant: "note" },
++            },
+             { label: "Environment Variables", slug: "providers/env" },
+             {
+               label: "EJSON",
+diff --git a/docs/src/content/docs/concepts/providers.mdx b/docs/src/content/docs/concepts/providers.mdx
+index d01502f..1910198 100644
+--- a/docs/src/content/docs/concepts/providers.mdx
++++ b/docs/src/content/docs/concepts/providers.mdx
+@@ -45,6 +45,7 @@ DATABASE_URL = { description = "Production database", providers = ["prod_vault"]
+ | [kdbx](/providers/kdbx/) (0.17+) | KeePass KDBX file (requires the `kdbx` build feature) | ✓ | KDBX 4 | ✓ | — |
+ | [dotenv](/providers/dotenv/) | A `.env` file | ✓ | ✓ | ✗ | — |
+ | [file](/providers/file/) (0.19+) | One plaintext byte file per secret (arbitrary bytes in 0.21+) | ✓ | ✓ | ✗ | — |
++| [sqlite](/providers/sqlite/) (0.22+) | Local SQLite database file with optional append-only history (requires the `sqlite` build feature) | ✓ | ✓ | ✗ | — |
+ | [env](/providers/env/) | Current process environment | ✓ | ✗ | ✗ | — |
+ | [ejson](/providers/ejson/) (0.20+) | EJSON encrypted file (requires the `ejson` build feature and EJSON CLI) | ✓ | ✗ | ✓ | — |
+ | [null](/providers/null/) (0.19+) | No storage; uses a manifest default, ephemeral generation, or an ephemeral run prompt | ✗ | ✗ | N/A | — |
+diff --git a/docs/src/content/docs/providers/sqlite.mdx b/docs/src/content/docs/providers/sqlite.mdx
+new file mode 100644
+index 0000000..efcae25
+--- /dev/null
++++ b/docs/src/content/docs/providers/sqlite.mdx
+@@ -0,0 +1,207 @@
++---
++title: SQLite Provider
++description: Store each secret as one row in a local SQLite database file, with an opt-in append-only history
++---
++
++import VersionCompatibility from '@cachix/site-kit/ui/VersionCompatibility.astro';
++
++<VersionCompatibility version="0.22" />
++
++The [SQLite](https://sqlite.org/) provider stores one row per secret in a
++local database file. It needs no external service or credential: the file's
++permissions are the only access control, which makes it a good fit for a
++single-user machine, a CI job's private workspace, or a store owned by a
++service user behind a privilege boundary.
++
++
++## At a glance
++
++| | |
++| --- | --- |
++| Provider | `sqlite` (0.22+) |
++| URI | `sqlite:PATH[?history=true]` |
++| Access | Read, write, delete, and batch reads |
++| Best for | A self-contained local store with optional audit history |
++| Authentication | Filesystem permissions |
++| Build feature | `sqlite` (on by default, 0.22+) |
++| Storage | Table `secrets`, row key `{project}/{profile}/{key}` |
++
++## Quick start
++
++Choose a database path, exclude it from version control, and route a
++declaration to it:
++
++```text title=".gitignore"
++/secrets.db
++```
++
++```toml title="secretspec.toml"
++[providers]
++local_db = "sqlite:./secrets.db"
++
++[profiles.development]
++API_TOKEN = { description = "Local API token", providers = ["local_db"] }
++```
++
++```bash
++$ secretspec set API_TOKEN --profile development
++
++$ secretspec get API_TOKEN --profile development
++
++$ secretspec run --profile development -- npm start
++```
++
++The first write creates `secrets.db` (and any missing parent directory) and
++stores the row `<project>/development/API_TOKEN`, where `<project>` is
++`[project].name` from the manifest. Reads of a database that does not exist
++yet report a missing value without creating the file.
++
++## Setup
++
++SQLite is compiled into the `secretspec` binary, so nothing has to be
++installed. The SecretSpec process needs read access to the database file for
++`get`, and write access to the file and its directory for `set`, generated
++values, imports, cache writes, and deletes.
++
++Relative paths resolve from the directory containing `secretspec.toml`, not
++from the shell's current directory. Every `sqlite` URI must include a path;
++the bare `sqlite` provider name is rejected.
++
++## Configuration
++
++### URI format
++
++```text
++sqlite:PATH[?history=true]
++```
++
++`PATH` is required and names the database file. It can be relative, absolute,
++or home-relative. The only accepted query parameter is `history`; user
++information and other options are rejected.
++
++### URI examples
++
++```text
++sqlite:./secrets.db                 # Beside secretspec.toml
++sqlite:///var/lib/app/secrets.db    # Absolute path
++sqlite:~/.local/share/app/secrets.db # Home-relative path
++sqlite:./secrets.db?history=true    # Keep an append-only history
++```
++
++SecretSpec percent-encodes the path when reporting the provider URI, so a
++path containing spaces round-trips.
++
++### Project configuration
++
++Check in the provider alias, but never the database file:
++
++```toml title="secretspec.toml"
++[providers]
++local_db = "sqlite:./secrets.db"
++
++[profiles.default]
++DATABASE_URL = { description = "Database connection string", providers = ["local_db"] }
++```
++
++## Storage model
++
++The database holds one table, `secrets`, with a text `item` key and a binary
++`value`. Convention addresses use this key:
++
++```text
++{project}/{profile}/{key}
++```
++
++Project and profile are therefore isolated even when one user-global
++database serves several projects. Values are arbitrary bytes and are read
++back exactly.
++
++Every write runs in one transaction. Deleting a row removes it and SQLite's
++`secure_delete` mode overwrites the freed page content, so a deleted value
++is not left readable in the file. Residue from before the provider owned
++the file is not rewritten retroactively; run `VACUUM` on the database if
++that matters.
++
++On Unix, SecretSpec creates a missing parent directory with mode `0700`,
++sets the database file to mode `0600`, and re-asserts that mode on every
++open in case the file pre-existed with looser permissions.
++
++## Use existing rows
++
++A native `ref.item` is the row key. It replaces the entire
++`{project}/{profile}/{key}` convention key:
++
++```toml title="secretspec.toml"
++[providers]
++shared_db = "sqlite:///var/lib/app/secrets.db"
++
++[profiles.production]
++DATABASE_PASSWORD = {
++  description = "Database password",
++  providers = ["shared_db"],
++  ref = { item = "shared/database-password" }
++}
++```
++
++`field`, `vault`, `section`, and `version` have no SQLite equivalent and are
++rejected.
++
++## History {/* #history-022 */}
++
++<VersionCompatibility version="0.22" />
++
++History is off by default. Appending `?history=true` to the URI makes every
++`set` and every effective `delete` also append one entry to a ledger inside
++the same database file:
++
++```toml title="secretspec.toml"
++[providers]
++audited_db = "sqlite:./secrets.db?history=true"
++```
++
++Each entry records the operation, a nanosecond timestamp, and a snapshot of
++every secret that is live after the operation, by key and SHA-256 digest.
++The bytes behind each digest are stored once per key, so an unchanged value
++captured in many snapshots costs one copy. Entries are hash-chained: each
++entry's hash covers the previous entry's hash and a canonical rendering of
++its own contents, so altering or removing an earlier entry breaks every hash
++after it.
++
++The ledger is append-only. Triggers refuse to delete a snapshot row, and a
++snapshot can be tombstoned exactly once by recording which later entry
++destroyed its value, which is what lets an operator remove the bytes of a
++compromised value while keeping the auditable record that it existed. The
++provider's own `get`, `set`, and `delete` never tombstone anything; that is
++left to tooling that opens the database directly.
++
++The history schema carries a version in `PRAGMA user_version`. A database
++written by a newer or older history layout is refused rather than silently
++written to in the wrong shape.
++
++A `?history=true` alias and a plain alias naming the same file address the
++same rows: history changes what a write records, not where the value lives.
++
++## CI/CD and containers
++
++Give each job a private database path and let `{project}/{profile}/{key}`
++keep jobs and environments separate. SecretSpec reads only the rows declared
++by the active profile; it does not enumerate or inject every row.
++
++## Security considerations
++
++:::danger[Plaintext storage]
++The SQLite provider does not encrypt values. Keep the database file out of
++version control, backups, build artifacts, container layers, and shared
++directories. Use an encrypted provider when the filesystem is not an
++acceptable trust boundary.
++:::
++
++The file mode is the entire access control. Protect the database with
++filesystem ownership and mount permissions, and do not let untrusted
++processes modify it while SecretSpec is running. The provider sets
++`trusted_schema=OFF` on every connection, so a tampered schema cannot run
++functions from triggers or views on the provider's behalf.
++
++With history enabled, the ledger retains the bytes of every value until an
++operator tombstones them, so an old, rotated value stays readable in the file
++until then. Enable history only where that retention is the point.
+diff --git a/docs/src/content/docs/quick-start.mdx b/docs/src/content/docs/quick-start.mdx
+index 3d598fd..75dcf87 100644
+--- a/docs/src/content/docs/quick-start.mdx
++++ b/docs/src/content/docs/quick-start.mdx
+@@ -155,6 +155,7 @@ $ secretspec config global init  # 0.17+
+   doppler: Doppler secret management (0.21+)
+   dotenv: Traditional .env files
+   file: Plaintext files, one per secret (0.19+)
++  sqlite: Local SQLite database, optional history (0.22+)
+   env: Read-only environment variables
+   null: Use defaults, generation, or run prompts without storage (0.19+)
+   systemd-credential: Read-only systemd service credentials (0.17+)
+diff --git a/docs/src/content/docs/reference/providers.mdx b/docs/src/content/docs/reference/providers.mdx
+index b92cf59..2f0f108 100644
+--- a/docs/src/content/docs/reference/providers.mdx
++++ b/docs/src/content/docs/reference/providers.mdx
+@@ -53,6 +53,30 @@ replaces the convention path with a relative path beneath `ROOT`.
+ **Security**: No encryption. New files use mode `0600` on Unix; traversal and
+ symbolic links inside the configured store are rejected.
+ 
++## SQLite Provider {/* #sqlite-provider-022 */}
++
++<VersionCompatibility version="0.22" />
++
++**URI**: `sqlite:PATH[?history=true]` - Stores one row per secret in a local
++SQLite database file
++
++```text
++sqlite:./secrets.db                # Relative to secretspec.toml
++sqlite:///var/lib/app/secrets.db   # Absolute path
++sqlite:./secrets.db?history=true   # Also keep an append-only history
++```
++
++**Features**: Read/write/delete, batch reads, project and profile isolation,
++exact bytes, opt-in hash-chained history of every write
++**Storage**: Table `secrets` keyed by `{project}/{profile}/{key}` by
++convention; a `ref.item` names the row key directly
++**Prerequisites**: None at runtime; build with `--features sqlite` (on by
++default, 0.22+)
++**Security**: No encryption. The database file and its parent directory are
++created with modes `0600` and `0700` on Unix and the file mode is re-asserted
++on every open; deleted rows are overwritten (`secure_delete`), not merely
++unlinked.
++
+ ## Environment Provider
+ 
+ **URI**: `env://` - Read-only access to system environment variables
+@@ -864,6 +888,7 @@ $ export SECRETSPEC_PROVIDER="dotenv:///config/.env"
+ |----------|------------|------------------|----------------|
+ | Dotenv | ❌ Plain text | Local filesystem | ❌ No |
+ | File (0.19+) | ❌ Plain text | Local filesystem | ❌ No |
++| SQLite (0.22+) | ❌ Plain text | Local filesystem | ❌ No |
+ | Environment | ❌ Plain text | Process memory | ❌ No |
+ | Null (0.19+) | N/A — no stored value | None | ❌ No |
+ | systemd Credential (0.17+) | Depends on unit source | systemd-managed runtime memory | ❌ No |
+diff --git a/docs/src/pages/index.astro b/docs/src/pages/index.astro
+index f4856f0..ebb819a 100644
+--- a/docs/src/pages/index.astro
++++ b/docs/src/pages/index.astro
+@@ -39,6 +39,7 @@ type ProviderMetadata = {
+ const providerMetadata: ProviderMetadata[] = [
+   { icon: 'apple', slug: 'keyring', label: 'macOS Keychain' },
+   { slug: 'kdbx', label: 'KeePass KDBX' },
++  { icon: 'sqlite', slug: 'sqlite', label: 'SQLite (0.22+)' },
+   { icon: '1password', slug: 'onepassword', label: '1Password' },
+   { slug: 'keeper', label: 'Keeper Secrets Manager' },
+   { slug: 'doppler', label: 'Doppler' },
+@@ -544,6 +545,7 @@ const reelScriptData = {
+ <span class="landing-provider-cursor" aria-hidden="true">›</span><a class="landing-provider-line is-selected" style="--provider-line-color: var(--syntax-blue)" href="/providers/keyring/"><span class="provider-name">keyring</span>: Uses system keychain (Recommended)</a>
+ <span class="landing-provider-slot" aria-hidden="true"> </span><a class="landing-provider-line" style="--provider-line-color: var(--syntax-cyan)" href="/providers/null/"><span class="provider-name">null</span>: Defaults, generation, or run prompts without storage</a>
+ <span class="landing-provider-slot" aria-hidden="true"> </span><a class="landing-provider-line" style="--provider-line-color: var(--syntax-cyan)" href="/providers/file/"><span class="provider-name">file</span>: Plaintext files, one per secret</a>
++<span class="landing-provider-slot" aria-hidden="true"> </span><a class="landing-provider-line" style="--provider-line-color: var(--syntax-cyan)" href="/providers/sqlite/"><span class="provider-name">sqlite</span>: Local SQLite database, optional history (0.22+)</a>
+ <span class="landing-provider-slot" aria-hidden="true"> </span><a class="landing-provider-line" style="--provider-line-color: var(--syntax-red)" href="/providers/bw/"><span class="provider-name">bw</span>: Bitwarden Password Manager</a>
+ <span class="landing-provider-slot" aria-hidden="true"> </span><a class="landing-provider-line" style="--provider-line-color: var(--syntax-yellow)" href="/providers/kdbx/"><span class="provider-name">kdbx</span>: KeePass KDBX databases</a>
+ <span class="landing-provider-slot" aria-hidden="true"> </span><a class="landing-provider-line" style="--provider-line-color: var(--syntax-yellow)" href="/providers/keeper/"><span class="provider-name">keeper</span>: Keeper Secrets Manager via official Rust SDK</a>
+diff --git a/secretspec/README.md b/secretspec/README.md
+index 4e84da6..7b3c815 100644
+--- a/secretspec/README.md
++++ b/secretspec/README.md
+@@ -29,6 +29,7 @@ SecretSpec fixes this by separating secret **declaration** from secret **storage
+   - [KeePass KDBX](https://secretspec.dev/providers/kdbx) (0.17+)
+   - [.env](https://secretspec.dev/providers/dotenv)
+   - [plaintext files](https://secretspec.dev/providers/file) (0.19+)
++  - [SQLite](https://secretspec.dev/providers/sqlite) (0.22+)
+   - [1Password](https://secretspec.dev/providers/onepassword)
+   - [Keeper Secrets Manager](https://secretspec.dev/providers/keeper) (0.18+)
+   - [Doppler](https://secretspec.dev/providers/doppler) (0.21+)
+@@ -94,6 +95,7 @@ $ secretspec config global init  # 0.17+
+   doppler: Doppler secret management (0.21+)
+   dotenv: Traditional .env files
+   file: Plaintext files, one per secret (0.19+)
++  sqlite: Local SQLite database, optional history (0.22+)
+   env: Read-only environment variables
+   null: Use defaults, generation, or run prompts without storage (0.19+)
+   systemd-credential: Read-only systemd service credentials (0.17+)
+@@ -233,6 +235,7 @@ SecretSpec supports multiple storage backends for secrets:
+ - **[KeePass KDBX](https://secretspec.dev/providers/kdbx)** (0.17+) - Local KeePass-compatible encrypted database
+ - **[.env files](https://secretspec.dev/providers/dotenv)** - Traditional dotenv files
+ - **[Plaintext files](https://secretspec.dev/providers/file)** (0.19+) - One UTF-8 file per secret in a local directory tree
++- **[SQLite](https://secretspec.dev/providers/sqlite)** (0.22+) - One row per secret in a local SQLite database file, with an opt-in append-only history
+ - **[Environment variables](https://secretspec.dev/providers/env)** - Read-only for CI/CD
+ - **[Null](https://secretspec.dev/providers/null)** (0.19+) - Use committed defaults, ephemeral generation, or ephemeral run prompts without secret storage
+ - **[systemd credentials](https://secretspec.dev/providers/systemd-credential)** (0.17+) - Read-only credentials passed to the current service
+-- 
+2.56.0
+

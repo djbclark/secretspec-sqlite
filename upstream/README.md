@@ -1,0 +1,50 @@
+# Upstream submission for the sqlite provider
+
+This directory holds everything needed to send the sqlite provider to
+`cachix/secretspec` as one pull request. Nothing here has been sent; the
+operator sends it.
+
+## Contents
+
+| File | What it is |
+| --- | --- |
+| `0001-Add-a-sqlite-provider-with-opt-in-history.patch` | Provider, registry wiring, feature flag, `Cargo.lock`, CI feature list, changelog |
+| `0002-Document-the-sqlite-provider.patch` | Provider doc page and every listing the upstream `AGENTS.md` checklist names |
+| `PR.md` | The pull request title and body, including design notes and testing evidence |
+| `REDUNDANT-AFTER-UPSTREAMING.md` | What in this fork and in `frdminc/sudo-secretspec` becomes redundant once the PR merges |
+
+## Base commit
+
+The series applies on `cachix/secretspec` `main` at `3d1c9ae`
+("Warn about ignored unknown fields in secret declarations (#485)",
+`Cargo.toml` version 0.21.1). It targets the 0.22 release and every
+user-visible mention is labeled `0.22+`.
+
+## How to send it
+
+```bash
+git clone https://github.com/cachix/secretspec.git
+cd secretspec
+git checkout -b sqlite-provider 3d1c9ae      # or current main; rebase if it moved
+git am ~/src/secretspec-sqlite/upstream/000*.patch
+cargo test --package secretspec -- provider::sqlite provider::disabled
+git push <your fork> sqlite-provider
+gh pr create --repo cachix/secretspec --title "$(sed -n '/^## Title/{n;n;p;}' ~/src/secretspec-sqlite/upstream/PR.md)" --body-file <(sed -n '/^## Body/,$p' ~/src/secretspec-sqlite/upstream/PR.md | tail -n +2)
+```
+
+If `main` has moved and `git am` reports a conflict, the only files that
+touch shared upstream lines are the listing edits (`catalog.rs`,
+`disabled.rs`, `mod.rs`, `tests.rs`, `Cargo.toml`, `test.yml`, `CHANGELOG.md`
+and the docs listings). `sqlite.rs` and `sqlite.mdx` are new files and never
+conflict.
+
+## How the series was produced
+
+The provider was ported from `frdminc/sudo-secretspec`
+(`secretspec/src/provider/sqlite.rs`, written against SecretSpec 0.19.1) onto
+upstream `main` following the shape of the Tailscale Setec provider commit
+(`16581eb`), which is the most recent provider addition upstream. The port
+replaced `SecretString` with the 0.21 `SecretBytes` contract (the `value`
+column is `BLOB`), moved registration to the shared catalog, made the history
+chain append private so `rusqlite` is not part of the public API, and added
+tests for the bytes contract, the history switch, and chain verification.
