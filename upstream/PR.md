@@ -129,7 +129,17 @@ SECRETSPEC_TEST_PROVIDERS=sqlite,sqlite-history \
 cargo test --workspace --exclude secretspec-php-native                  see below
 ```
 
-Workspace suite result: FULL_SUITE_RESULT_PLACEHOLDER
+Workspace suite result (`--exclude secretspec-ipc-conformance --no-fail-fast
+-- --skip provider::sops`, see below): 55 test binaries ok, 2,027 tests passed
+including the full `secretspec` lib suite (`1732 passed; 0 failed; 4 ignored`),
+every `tests/*.rs` integration binary, `secretspec-ipc`, `libsecretspec`, and
+doc tests. Three failures, all environmental and present before this change:
+`secretspec-derive` `compile_tests` (trybuild path normalization, because the
+build used a shared `CARGO_TARGET_DIR` outside the workspace so `$WORK` is
+not substituted), the 21 `provider::sops` tests (the `sops` CLI is not
+installed on the build machine; CI downloads it), and the
+`secretspec-ipc-conformance` build script (needs the `yyjson` C library,
+which CI installs with `scripts/install-yyjson.sh`). None touch the provider.
 
 Not run: the Astro docs build (`npm` was not run in the checkout). The new
 page follows `file.mdx` and `setec.mdx` exactly in front matter, imports, and

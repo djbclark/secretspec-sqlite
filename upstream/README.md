@@ -22,6 +22,18 @@ user-visible mention is labeled `0.22+`.
 
 ## How to send it
 
+The same two commits are already on this fork as branch `sqlite-provider`
+(tip `50d3e2b`, base `3d1c9ae`), so the shortest path is:
+
+```bash
+gh pr create --repo cachix/secretspec --head djbclark:sqlite-provider \
+  --title "$(sed -n '/^## Title/{n;n;p;}' ~/src/secretspec-sqlite/upstream/PR.md)" \
+  --body-file <(sed -n '/^## Body/,$p' ~/src/secretspec-sqlite/upstream/PR.md | tail -n +2)
+```
+
+To rebuild the branch from the patches instead (for example after upstream
+`main` moves):
+
 ```bash
 git clone https://github.com/cachix/secretspec.git
 cd secretspec
