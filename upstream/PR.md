@@ -141,9 +141,19 @@ installed on the build machine; CI downloads it), and the
 `secretspec-ipc-conformance` build script (needs the `yyjson` C library,
 which CI installs with `scripts/install-yyjson.sh`). None touch the provider.
 
-Not run: the Astro docs build (`npm` was not run in the checkout). The new
-page follows `file.mdx` and `setec.mdx` exactly in front matter, imports, and
-the `VersionCompatibility` component, and the sidebar entry mirrors `file`.
+Docs build (`npm --prefix docs ci && npm --prefix docs run build`, which
+runs `check:provider-credentials`, `check:version-compatibility`, `astro
+check`, and `astro build`): completed with 0 errors and 0 warnings from
+`astro check`; `/providers/sqlite/` renders with the "New in version 0.22"
+notice and the landing page links it. The page follows `file.mdx` and
+`setec.mdx` in front matter, imports, and the `VersionCompatibility`
+component, and the sidebar entry mirrors `file`.
+
+Re-verified on 2026-10-09 against the same base (upstream `main` had not
+moved) from a fresh export of the branch: `cargo fmt --check` ok; the
+provider, generic, and disabled-provider suites 108 passed, 0 failed (32 in
+`provider::sqlite`); `--no-default-features --features sqlite` ok; `clippy
+--tests` with no warnings in `sqlite.rs` (29 pre-existing elsewhere).
 
 ### Checklist (AGENTS.md "Adding Provider Documentation")
 
