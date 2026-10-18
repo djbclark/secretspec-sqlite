@@ -15,7 +15,10 @@ jobs:
   linux:
     name: linux (fmt, clippy, test, features, package)
     runs-on: ubuntu
-    timeout-minutes: 40
+    # The green run 586 took 35.5 min end-to-end on Hyades; 40 was one slow
+    # run away from killing a healthy job (sudo-secretspec run 585 died that
+    # way). 60 leaves headroom.
+    timeout-minutes: 60
     steps:
       - uses: https://github.com/actions/checkout@v4
       - name: Install gcc and Rust (pinned by rust-toolchain.toml)
