@@ -51,16 +51,17 @@ git read-tree "$target_sha^{tree}"
 git checkout-index -a -f
 
 # Overlay selected paths from ci/base (ignore missing).
+# Unset overlay env so git -C "$top" talks to the real repo.
+overlay_git() { env -u GIT_INDEX_FILE -u GIT_WORK_TREE git -C "$top" "$@"; }
 overlay_paths=(.github/workflows/linux-ci.yml .github/workflows/agent-ci.yml scripts/github-ci-run docs/ci-github.md)
 for path in "${overlay_paths[@]}"; do
-  if git -C "$top" cat-file -e "$base_ref:$path" 2>/dev/null; then
+  if overlay_git cat-file -e "$base_ref:$path" 2>/dev/null; then
     mkdir -p "$GIT_WORK_TREE/$(dirname "$path")"
-    git -C "$top" show "$base_ref:$path" > "$GIT_WORK_TREE/$path"
+    overlay_git show "$base_ref:$path" > "$GIT_WORK_TREE/$path"
   fi
 done
-# Overlay scripts/ci/* if present on ci/base
-if git -C "$top" ls-tree -r --name-only "$base_ref" | ggrep -q '^scripts/ci/'; then
-  git -C "$top" archive "$base_ref" -- scripts/ci | tar -x -C "$GIT_WORK_TREE"
+if overlay_git ls-tree -r --name-only "$base_ref" | ggrep -q '^scripts/ci/'; then
+  overlay_git archive "$base_ref" -- scripts/ci | tar -x -C "$GIT_WORK_TREE"
 fi
 
 # Neutralise every workflow that is not our linux/agent CI.
@@ -85,14 +86,15 @@ if [ "$found" = 0 ]; then
 fi
 
 # Rebuild the index from the mutated work tree.
-git add -A -- "$GIT_WORK_TREE"
-# git add with absolute worktree can leave weird paths; use update via -A from worktree root
-cd "$GIT_WORK_TREE"
-git add -A
+(
+  cd "$GIT_WORK_TREE"
+  git add -A
+)
 tree=$(git write-tree)
-cd "$top"
-msg="ci: overlay ci/base onto ${short} ($(git log -1 --format=%s "$target_sha"))"
+msg="ci: overlay ci/base onto ${short} ($(env -u GIT_INDEX_FILE -u GIT_WORK_TREE git -C "$top" log -1 --format=%s "$target_sha"))"
 commit=$(git commit-tree "$tree" -p "$target_sha" -m "$msg")
+# Drop temp index/worktree env before push
+unset GIT_INDEX_FILE GIT_WORK_TREE
 
 echo "overlay $commit for $target_sha -> $remote $run_branch"
 timeout 600 git push --force "$remote" "$commit:refs/heads/$run_branch"
