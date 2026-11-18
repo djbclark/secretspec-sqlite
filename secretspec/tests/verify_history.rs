@@ -85,29 +85,6 @@ fn a_written_ledger_verifies_and_reports_its_head() {
         String::from_utf8_lossy(&set.stderr)
     );
 
-    // TEMPORARY DIAGNOSTIC (removed before the fix lands).
-    eprintln!("DIAG set stderr: {}", String::from_utf8_lossy(&set.stderr));
-    let mut names: Vec<String> = fs::read_dir(dir.path())
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    eprintln!("DIAG files: {names:?}");
-    for name in fs::read_dir(dir.path()).unwrap() {
-        let path = name.unwrap().path();
-        if path.extension().is_some_and(|ext| ext == "db") {
-            let bytes = fs::read(&path).unwrap();
-            let has_entries = bytes
-                .windows(b"CREATE TABLE entries".len())
-                .any(|window| window == b"CREATE TABLE entries");
-            eprintln!(
-                "DIAG {} has CREATE TABLE entries: {has_entries} ({} bytes)",
-                path.display(),
-                bytes.len()
-            );
-        }
-    }
-
     let output = run(dir.path(), &["verify-history", "--provider", "audited"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -129,6 +106,15 @@ fn a_written_ledger_verifies_and_reports_its_head() {
     assert!(json.status.success());
     let report: Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(report["provider"], "sqlite");
+    // The alias is expanded verbatim, so the store the command audited is the
+    // one the write went to; the query string that turns history on survives.
+    assert!(
+        report["uri"]
+            .as_str()
+            .unwrap()
+            .ends_with("secrets.db?history=true"),
+        "report: {report}"
+    );
     assert_eq!(report["verifiable"], true);
     assert_eq!(report["ok"], true);
     assert_eq!(report["history"]["entries"], 1);
@@ -157,6 +143,10 @@ fn json_reports_a_provider_without_a_ledger() {
     );
     assert!(output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        report["uri"].as_str().unwrap().ends_with("plain.db"),
+        "report: {report}"
+    );
     assert_eq!(report["verifiable"], false);
     assert_eq!(report["ok"], true);
     assert!(report.get("history").is_none());
