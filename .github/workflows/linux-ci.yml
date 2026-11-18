@@ -43,6 +43,11 @@ jobs:
           set -euo pipefail
           curl -fsSL -o /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.13.2/sops-v3.13.2.linux.amd64
           sudo chmod 0755 /usr/local/bin/sops
+      # libsecretspec-resolver takes yyjson from the system rather than vendoring
+      # it, and this job has no Nix to supply it. The Rust conformance package
+      # compiles the same C sources, so this must precede every cargo step.
+      - name: Install yyjson
+        run: bash scripts/install-yyjson.sh
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run Clippy
@@ -52,7 +57,7 @@ jobs:
       - name: Check each provider feature standalone
         run: |
           set -euo pipefail
-          for feature in cli keyring keeper gcsm awssm vault openbao infisical bws akv aac sops bw; do
+          for feature in cli keyring kdbx keeper gcsm awssm awsps vault openbao infisical doppler bws akv aac age ejson sops bw kubernetes cloudflare scaleway setec sqlite; do
             echo "== feature $feature"
             cargo check --package secretspec --no-default-features --features "$feature"
           done
