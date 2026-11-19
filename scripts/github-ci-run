@@ -3,8 +3,12 @@
 #
 #   scripts/github-ci-run [--no-wait] [REF]
 #
-# REF defaults to HEAD. Requires a local ci/base branch (or origin/ci/base) that
+# REF defaults to HEAD. Needs a ci/base branch — local or origin/ci/base — that
 # holds .github/workflows/linux-ci.yml (or agent-ci.yml) plus this script.
+# When both exist the local one is used only if it is level with or ahead of the
+# remote: a stale local ci/base would silently build an old workflow, and that
+# reads as "CI failed for a reason unrelated to your change" (2026-11-18: a
+# missing yyjson step in a stale local ref burned a whole run).
 # Every other .github/workflows/* file is removed in the overlay commit so
 # upstream workflows do not fire on the ci/run/** push.
 set -euo pipefail
@@ -23,15 +27,42 @@ if ! git remote get-url "$remote" >/dev/null 2>&1; then
   exit 2
 fi
 
+# >>> ci/base selection (exercised by scripts/github-ci-run.test)
+local_base=refs/heads/ci/base
+remote_base=refs/remotes/"$remote"/ci/base
+have_local=0
+have_remote=0
+git show-ref --verify --quiet "$local_base" && have_local=1
+git show-ref --verify --quiet "$remote_base" && have_remote=1
+
 base_ref=
-if git show-ref --verify --quiet refs/heads/ci/base; then
-  base_ref=refs/heads/ci/base
-elif git show-ref --verify --quiet refs/remotes/"$remote"/ci/base; then
-  base_ref=refs/remotes/"$remote"/ci/base
+if [ "$have_local" = 1 ] && [ "$have_remote" = 1 ]; then
+  local_sha=$(git rev-parse "$local_base")
+  remote_sha=$(git rev-parse "$remote_base")
+  if [ "$local_sha" = "$remote_sha" ]; then
+    base_ref=$local_base
+  elif git merge-base --is-ancestor "$local_base" "$remote_base"; then
+    echo "github-ci-run: local ci/base ($(git rev-parse --short=8 "$local_sha")) is behind" \
+      "$remote/ci/base ($(git rev-parse --short=8 "$remote_sha")); using the remote ref." >&2
+    echo "github-ci-run: refresh it with: git fetch $remote ci/base:ci/base" >&2
+    base_ref=$remote_base
+  elif git merge-base --is-ancestor "$remote_base" "$local_base"; then
+    # Local-only commits on ci/base are deliberate work; keep them.
+    base_ref=$local_base
+  else
+    echo "github-ci-run: ci/base has diverged (local $(git rev-parse --short=8 "$local_sha")," \
+      "$remote $(git rev-parse --short=8 "$remote_sha")); refusing to guess which one you meant." >&2
+    exit 2
+  fi
+elif [ "$have_local" = 1 ]; then
+  base_ref=$local_base
+elif [ "$have_remote" = 1 ]; then
+  base_ref=$remote_base
 else
   echo "github-ci-run: ci/base not found locally or on $remote" >&2
   exit 2
 fi
+# <<< ci/base selection
 
 target_sha=$(git rev-parse --verify "$ref^{commit}")
 short=$(git rev-parse --short=8 "$target_sha")
